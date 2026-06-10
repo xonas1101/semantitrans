@@ -1,8 +1,13 @@
 # semantitrans — idiom-aware English-speech → Hindi-text
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/xonas1101/semantitrans/blob/main/colab_demo.ipynb)
+
 Translate **English audio → Hindi text**, with special handling for
 **idiomatic / figurative** English (e.g. *"raining cats and dogs"*) that standard
 speech-translation cascades render literally and wrong.
+
+**Fastest way to try it: open the Colab notebook above** (free GPU, nothing to
+install). Local install instructions are further down.
 
 ## Pipeline
 
@@ -32,7 +37,26 @@ is **Stage 2** plus a **purpose-built Hindi idiom test set** and evaluation.
 > applying it inside an English-**speech** → Hindi-**text** cascade, evaluated
 > with a Hindi idiom test set. We do not claim to have invented idiom resolution.
 
-## Install
+## Example (real output)
+
+Input audio says: *"It was raining cats and dogs last night, so we called it a day."*
+
+| Mode | Hindi output | Notes |
+|------|--------------|-------|
+| `off` (baseline) | `यह रात हम इसे एक दिन कहा जाता था` | both idioms lost / garbled |
+| `substitute` (idiom-aware) | `रात बहुत ही भारी वर्षा हो रही थी, इसलिए हम दिन के लिए काम करना बंद कर देते थे` | *"it rained very heavily ... so we stopped working for the day"* — correct |
+
+The resolver detected `raining cats and dogs → raining very heavily` and
+`called it a day → stop working for the day` (lemma-matched from "called").
+
+## Run in Google Colab (recommended — free GPU)
+
+The local machine's GPU may be unavailable (e.g. missing driver); Colab gives a
+free CUDA GPU with nothing to install. Click the **Open in Colab** badge above,
+or open `colab_demo.ipynb`. The notebook clones this repo, installs deps (reusing
+Colab's CUDA torch), and runs the demo + lets you upload your own audio.
+
+## Install (local)
 
 Requires **Python 3.11–3.13** (not 3.14 — no ML wheels yet) and **ffmpeg**.
 
