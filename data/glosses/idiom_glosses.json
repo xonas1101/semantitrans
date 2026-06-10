@@ -1,0 +1,68 @@
+{
+  "metadata": {
+    "description": "Idiom -> literal-meaning gloss knowledge base consumed by the idiom-aware resolution module (stage 2). Keys are surface idiom forms; each entry maps to a literal English paraphrase used for substitution or as a translation hint.",
+    "schema": {
+      "<idiom surface form>": {
+        "literal": "<literal English paraphrase>",
+        "source": "<provenance tag>"
+      }
+    },
+    "license_note": "This seed set contains short, common-knowledge English idiom paraphrases authored for this project (source tag 'seed'). To EXPAND coverage at scale, run build_glosses.py, which intersects the MAGPIE idiom inventory (CC-BY-4.0) with a glossed source. VERIFY the license of any external gloss source before redistributing the merged KB; record its license here.",
+    "sources": [
+      {"tag": "seed", "name": "project-authored common-idiom paraphrases", "license": "project (CC-BY-4.0)"}
+    ]
+  },
+  "glosses": {
+    "raining cats and dogs": {"literal": "raining very heavily", "source": "seed"},
+    "kick the bucket": {"literal": "die", "source": "seed"},
+    "spill the beans": {"literal": "reveal the secret", "source": "seed"},
+    "break the ice": {"literal": "ease the initial tension", "source": "seed"},
+    "piece of cake": {"literal": "very easy", "source": "seed"},
+    "hit the sack": {"literal": "go to bed", "source": "seed"},
+    "hit the hay": {"literal": "go to bed", "source": "seed"},
+    "under the weather": {"literal": "feeling ill", "source": "seed"},
+    "bite the bullet": {"literal": "endure a painful situation bravely", "source": "seed"},
+    "let the cat out of the bag": {"literal": "reveal a secret", "source": "seed"},
+    "once in a blue moon": {"literal": "very rarely", "source": "seed"},
+    "cost an arm and a leg": {"literal": "be very expensive", "source": "seed"},
+    "the ball is in your court": {"literal": "it is your turn to act", "source": "seed"},
+    "barking up the wrong tree": {"literal": "pursuing a mistaken course of action", "source": "seed"},
+    "beat around the bush": {"literal": "avoid speaking directly about the topic", "source": "seed"},
+    "pull someone's leg": {"literal": "tease someone playfully", "source": "seed"},
+    "pulling my leg": {"literal": "teasing me", "source": "seed"},
+    "a blessing in disguise": {"literal": "something that seems bad but is actually good", "source": "seed"},
+    "burn the midnight oil": {"literal": "work late into the night", "source": "seed"},
+    "cut corners": {"literal": "do something cheaply or carelessly", "source": "seed"},
+    "get cold feet": {"literal": "become nervous and hesitant", "source": "seed"},
+    "hit the nail on the head": {"literal": "describe exactly what is causing a situation", "source": "seed"},
+    "in hot water": {"literal": "in trouble", "source": "seed"},
+    "on the fence": {"literal": "undecided", "source": "seed"},
+    "throw in the towel": {"literal": "give up", "source": "seed"},
+    "the last straw": {"literal": "the final problem that makes a situation unbearable", "source": "seed"},
+    "a dime a dozen": {"literal": "very common and of little value", "source": "seed"},
+    "go the extra mile": {"literal": "make a special effort", "source": "seed"},
+    "speak of the devil": {"literal": "the person we were talking about has appeared", "source": "seed"},
+    "wrap your head around": {"literal": "fully understand", "source": "seed"},
+    "miss the boat": {"literal": "miss an opportunity", "source": "seed"},
+    "sit on the fence": {"literal": "remain undecided", "source": "seed"},
+    "see eye to eye": {"literal": "agree completely", "source": "seed"},
+    "call it a day": {"literal": "stop working for the day", "source": "seed"},
+    "out of the blue": {"literal": "unexpectedly", "source": "seed"},
+    "a piece of my mind": {"literal": "a frank scolding", "source": "seed"},
+    "add fuel to the fire": {"literal": "make a bad situation worse", "source": "seed"},
+    "bury the hatchet": {"literal": "end a quarrel and make peace", "source": "seed"},
+    "cry over spilt milk": {"literal": "be upset about something that cannot be undone", "source": "seed"},
+    "jump on the bandwagon": {"literal": "join a popular trend", "source": "seed"},
+    "keep an eye on": {"literal": "watch carefully", "source": "seed"},
+    "let off steam": {"literal": "release pent-up energy or anger", "source": "seed"},
+    "off the hook": {"literal": "no longer in trouble", "source": "seed"},
+    "on cloud nine": {"literal": "extremely happy", "source": "seed"},
+    "pull the plug": {"literal": "put an end to something", "source": "seed"},
+    "take it with a grain of salt": {"literal": "regard it with skepticism", "source": "seed"},
+    "the tip of the iceberg": {"literal": "a small visible part of a much larger problem", "source": "seed"},
+    "under the radar": {"literal": "without attracting attention", "source": "seed"},
+    "when pigs fly": {"literal": "never", "source": "seed"},
+    "a hot potato": {"literal": "a controversial issue that is awkward to handle", "source": "seed"},
+    "back to the drawing board": {"literal": "start planning again from the beginning", "source": "seed"}
+  }
+}

@@ -1,0 +1,29 @@
+# Core runtime — target: Python 3.11–3.13 (NOT 3.14, no ML wheels yet).
+# GPU vs CPU torch build is chosen by the user / setup script; the pinned
+# torch here is the CPU/default wheel. On Windows with CUDA, install the
+# matching torch build from https://pytorch.org first, then `pip install -r`.
+
+torch>=2.2,<3.0
+
+# Stage 1 — ASR
+openai-whisper>=20231117
+
+# Stage 3 — translation (MarianMT) + tokenizer deps
+transformers>=4.40,<5.0
+sentencepiece>=0.2.0
+sacremoses>=0.1.1
+
+# Idiom inventory / test-set corpus
+datasets>=2.18.0
+
+# Data wrangling + evaluation
+pandas>=2.2.0
+sacrebleu>=2.4.0          # chrF / chrF++
+
+# Test-set TTS (build_testset.py). Online, cross-platform.
+gTTS>=2.5.0
+
+# --- Optional, installed separately (see requirements-optional.txt) ---
+#   spacy                 lemmatized idiom matching (resolver falls back without it)
+#   peft, accelerate      optional LoRA adapter on opus-mt-en-hi
+#   unbabel-comet         optional COMET metric (~2GB, GPU recommended)

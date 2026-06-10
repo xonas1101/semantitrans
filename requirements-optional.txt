@@ -1,0 +1,14 @@
+# Optional extras. Install only what you need.
+
+# Better idiom detection via lemmatization. The resolver works WITHOUT this
+# (pure-Python normalization fallback); installing it improves recall on
+# inflected idiom variants. After install: python -m spacy download en_core_web_sm
+spacy>=3.7.0
+
+# Optional lightweight LoRA adapter on opus-mt-en-hi (train_lora.py).
+# Tens of minutes on an RTX 4060 — NOT a from-scratch / multi-hour train.
+peft>=0.11.0
+accelerate>=0.30.0
+
+# Optional COMET metric for evaluate.py --comet (~2GB download, GPU recommended).
+unbabel-comet>=2.2.0
