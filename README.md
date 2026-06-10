@@ -37,15 +37,25 @@ is **Stage 2** plus a **purpose-built Hindi idiom test set** and evaluation.
 Requires **Python 3.11–3.13** (not 3.14 — no ML wheels yet) and **ffmpeg**.
 
 ```bash
-# Linux / macOS
+# Linux / macOS — setup.sh prefers uv (no root; fetches managed CPython 3.12)
 ./setup.sh                 # core deps
-./setup.sh --optional      # + spaCy / peft / COMET extras
+./setup.sh --optional      # + spaCy / peft extras
 
 # Windows (optional convenience; Python entry points are identical)
 setup_windows.bat
 ```
 
-On Fedora, if no supported Python: `sudo dnf install -y python3.12`.
+If you don't have a supported Python, the easiest no-root route is
+[`uv`](https://docs.astral.sh/uv/) (what `setup.sh` uses):
+
+```bash
+python3 -m pip install --user uv     # or: curl -LsSf https://astral.sh/uv/install.sh | sh
+uv python install 3.12
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -r requirements.txt
+```
+
+(Alternatively on Fedora: `sudo dnf install -y python3.12`.)
 For **GPU**, install the matching CUDA torch build from <https://pytorch.org>
 first; the code auto-detects CUDA and falls back to CPU. Verify:
 
