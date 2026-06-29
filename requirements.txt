@@ -25,6 +25,11 @@ matplotlib>=3.7.0         # noise_eval.py WER-vs-SNR plot
 # Test-set TTS (build_testset.py). Online, cross-platform.
 gTTS>=2.5.0
 
+# Web UI (app.py). Pinned <6: gradio 6 forces huggingface-hub>=1.0 which
+# breaks transformers (needs <1.0).
+gradio>=5,<6
+huggingface-hub>=0.34,<1.0
+
 # --- Optional, installed separately (see requirements-optional.txt) ---
 #   spacy                 lemmatized idiom matching (resolver falls back without it)
 #   peft, accelerate      optional LoRA adapter on opus-mt-en-hi
