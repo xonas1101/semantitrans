@@ -43,6 +43,12 @@ _WORD_RE = re.compile(r"\w+", re.UNICODE)
 # Our trained figurative-vs-literal detector (built by train_idiom_detector.py).
 DETECTOR_DIR = config.ROOT_DIR / "models" / "idiom-detector"
 
+# Suppress a gloss substitution ONLY when the detector is this confident the
+# usage is literal. Idioms are figurative by default (MAGPIE is ~75% figurative),
+# so we bias toward substituting: raw argmax over-suppresses borderline cases
+# (e.g. "raining cats and dogs" at p_literal=0.51).
+LITERAL_GATE_THRESHOLD = 0.70
+
 
 class _Detector:
     """Lazy wrapper around our fine-tuned figurative/literal classifier.
@@ -52,9 +58,10 @@ class _Detector:
     call returns True so the resolver degrades to its rule-based behavior.
     """
 
-    def __init__(self):
+    def __init__(self, lit_threshold: float = LITERAL_GATE_THRESHOLD):
         self._model = None
         self._tok = None
+        self.lit_threshold = lit_threshold
         self._ok = DETECTOR_DIR.exists()
         if not self._ok:
             logger.info("No trained detector at %s; resolver gates nothing", DETECTOR_DIR)
@@ -82,8 +89,9 @@ class _Detector:
 
         inputs = self._tok(idiom, context, return_tensors="pt", truncation=True, max_length=128)
         with torch.no_grad():
-            logits = self._model(**inputs).logits
-        return int(logits.argmax(-1)) == 1  # 1 == figurative
+            p_literal = float(self._model(**inputs).logits.softmax(-1)[0, 0])
+        # treat as figurative (-> substitute) unless confidently literal
+        return p_literal < self.lit_threshold
 
 
 @dataclass
