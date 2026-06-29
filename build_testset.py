@@ -73,18 +73,41 @@ def main() -> int:
     ap.add_argument("--max-words", type=int, default=30, help="skip overly long sentences")
     args = ap.parse_args()
 
-    from datasets import load_dataset
+    magpie_path = config.DATA_DIR / "magpie.jsonl"
+    if not magpie_path.exists():
+        raise SystemExit(
+            f"{magpie_path} not found. Download with:\n"
+            "  curl -sL -o data/magpie.jsonl "
+            "https://raw.githubusercontent.com/hslh/magpie-corpus/master/"
+            "MAGPIE_filtered_split_typebased.jsonl"
+        )
+    logger.info("Loading %s ...", magpie_path)
 
-    logger.info("Loading %s ...", config.MAGPIE_DATASET)
-    ds = load_dataset(config.MAGPIE_DATASET, split="train")
+    def best_sentence(idiom: str, context: list[str]) -> str:
+        """Pick the context sentence with the most idiom-token overlap."""
+        want = set(norm_key(idiom))
+        best, score = "", -1
+        for s in context:
+            toks = set(norm_key(s))
+            ov = len(want & toks)
+            if ov > score:
+                best, score = s.strip(), ov
+        return best
 
     kb_keys = kb_idiom_keys()
     rows = []
-    for row in ds:
-        if (row.get("usage") or "").lower() != "figurative":
+    for line in magpie_path.open(encoding="utf-8"):
+        line = line.strip()
+        if not line:
             continue
-        sent = (row.get("sentence") or "").strip()
-        idiom = (row.get("idiom") or "").strip()
+        try:
+            r = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if r.get("label") != "i":  # 'i' = figurative/idiomatic usage
+            continue
+        idiom = (r.get("idiom") or "").strip()
+        sent = best_sentence(idiom, r.get("context", []))
         if not sent or not idiom:
             continue
         if len(sent.split()) > args.max_words:
