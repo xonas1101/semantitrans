@@ -15,7 +15,7 @@ install). Local install instructions are further down.
 audio
  ─▶ [Stage 1] Whisper ASR (+ our fine-tune)               → English transcript
  ─▶ [Stage 2] Idiom-aware resolution (+ our detector)      → literalized English
- ─▶ [Stage 3] opus-mt-en-hi translation (+ our LoRA)       → Hindi text
+ ─▶ [Stage 3] NLLB-200 EN→HI translation                   → Hindi text
 ```
 
 Every stage starts from a pretrained base but carries a component **we trained**
@@ -36,10 +36,13 @@ and `adapters/` (git-ignored, re-trainable).
 
 > **Honest framing.** Stage 1 is a small fine-tune (not a from-scratch ASR) and
 > won't beat the base on general audio — it exists so stage 1 has a trained
-> component. Stage 3's LoRA is thin (idiom pairs are rare in general corpora).
-> The **stage-2 detector is the substantive trained model**: it gates gloss
-> injection so idioms used *literally* are left alone. All load automatically if
-> present and degrade gracefully to the pretrained base if absent.
+> component. The default Stage-3 translator was switched to **NLLB-200** for
+> Hindi fluency; the LoRA is opus-mt-specific (thin — idiom pairs are rare) and
+> only applies when `TRANSLATOR_MODEL` is set back to opus. The **stage-2
+> detector is the substantive trained model**: it gates gloss injection so idioms
+> used *literally* are left alone (suppressing substitution only when confidently
+> literal). All components load automatically if present and degrade gracefully
+> to the pretrained base if absent.
 
 ### What Stage 2 does
 
@@ -178,7 +181,8 @@ Report it as exactly that.
 
 - **Whisper** — Radford et al. 2022 (MIT).
 - **DistilBERT** — Sanh et al. 2019 (Apache-2.0); base for the idiom detector.
-- **opus-mt-en-hi** — Tiedemann & Thottingal 2020, Helsinki-NLP (Apache-2.0).
+- **NLLB-200** — NLLB Team / Meta 2022 (CC-BY-NC-4.0); default EN→HI translator.
+- **opus-mt-en-hi** — Tiedemann & Thottingal 2020, Helsinki-NLP (Apache-2.0); alt translator + LoRA base.
 - **MAGPIE** — Haagsma et al. 2020 (CC-BY-4.0); detector trained on the
   `MAGPIE_filtered_split_typebased.jsonl` release.
 - **LibriSpeech** — Panayotov et al. 2015 (CC-BY-4.0); Whisper fine-tune data.

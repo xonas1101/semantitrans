@@ -43,8 +43,12 @@ WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "openai/whisper-small")
 # of WHISPER_MODEL when this directory exists.
 WHISPER_FT_DIR = ROOT_DIR / "models" / "whisper-ft"
 
-# Stage 3 — EN->HI translation (MarianMT, Apache-2.0).
-TRANSLATOR_MODEL = os.environ.get("TRANSLATOR_MODEL", "Helsinki-NLP/opus-mt-en-hi")
+# Stage 3 — EN->HI translation. NLLB-200 (Meta, CC-BY-NC-4.0) is far more fluent
+# for Hindi than opus-mt-en-hi; override via env var (e.g. an opus model).
+TRANSLATOR_MODEL = os.environ.get("TRANSLATOR_MODEL", "facebook/nllb-200-distilled-600M")
+# NLLB language codes (used only when the model name contains "nllb").
+NLLB_SRC_LANG = "eng_Latn"
+NLLB_TGT_LANG = "hin_Deva"
 
 # Optional LoRA adapter directory (applied on top of TRANSLATOR_MODEL if present
 # and enabled). Built by train_lora.py.
