@@ -20,6 +20,7 @@ datasets>=2.18.0
 # Data wrangling + evaluation
 pandas>=2.2.0
 sacrebleu>=2.4.0          # chrF / chrF++
+matplotlib>=3.7.0         # noise_eval.py WER-vs-SNR plot
 
 # Test-set TTS (build_testset.py). Online, cross-platform.
 gTTS>=2.5.0

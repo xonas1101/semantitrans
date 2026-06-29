@@ -66,7 +66,9 @@ def synthesize(text: str, out_path) -> bool:
 def main() -> int:
     config.configure_logging()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--n", type=int, default=60, help="number of test sentences")
+    ap.add_argument("--n", type=int, default=60, help="number of FIGURATIVE test sentences")
+    ap.add_argument("--n-literal", type=int, default=0,
+                    help="number of LITERAL-usage sentences (for the gated-detector analysis)")
     ap.add_argument("--seed", type=int, default=13)
     ap.add_argument("--prefer-kb", action="store_true", help="bias toward KB-covered idioms")
     ap.add_argument("--no-tts", action="store_true", help="write manifest without audio")
@@ -95,7 +97,9 @@ def main() -> int:
         return best
 
     kb_keys = kb_idiom_keys()
-    rows = []
+    # MAGPIE label -> usage; 'i' = figurative/idiomatic, 'l' = literal
+    label2usage = {"i": "figurative", "l": "literal"}
+    by_usage: dict[str, list] = {"figurative": [], "literal": []}
     for line in magpie_path.open(encoding="utf-8"):
         line = line.strip()
         if not line:
@@ -104,7 +108,8 @@ def main() -> int:
             r = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if r.get("label") != "i":  # 'i' = figurative/idiomatic usage
+        usage = label2usage.get(r.get("label"))
+        if usage is None:
             continue
         idiom = (r.get("idiom") or "").strip()
         sent = best_sentence(idiom, r.get("context", []))
@@ -112,15 +117,24 @@ def main() -> int:
             continue
         if len(sent.split()) > args.max_words:
             continue
-        rows.append({"idiom": idiom, "sentence": sent, "in_kb": norm_key(idiom) in kb_keys})
+        by_usage[usage].append(
+            {"idiom": idiom, "sentence": sent, "in_kb": norm_key(idiom) in kb_keys, "usage": usage}
+        )
 
-    logger.info("Figurative candidates: %d (%d in KB)", len(rows), sum(r["in_kb"] for r in rows))
+    for u, lst in by_usage.items():
+        logger.info("%s candidates: %d (%d in KB)", u, len(lst), sum(x["in_kb"] for x in lst))
 
     rng = random.Random(args.seed)
-    rng.shuffle(rows)
-    if args.prefer_kb:
-        rows.sort(key=lambda r: not r["in_kb"])  # KB-covered first, stable
-    selected = rows[: args.n]
+    selected = []
+    for usage, want in (("figurative", args.n), ("literal", args.n_literal)):
+        pool = by_usage[usage]
+        rng.shuffle(pool)
+        if args.prefer_kb:
+            pool.sort(key=lambda r: not r["in_kb"])  # KB-covered first, stable
+        take = pool[:want]
+        if len(take) < want:
+            logger.warning("Only %d %s items available (< requested %d)", len(take), usage, want)
+        selected.extend(take)
 
     manifest_rows = []
     for i, r in enumerate(selected):
@@ -136,7 +150,7 @@ def main() -> int:
                 "id": rid,
                 "idiom": r["idiom"],
                 "in_kb": int(r["in_kb"]),
-                "usage": "figurative",
+                "usage": r["usage"],
                 "english_source": r["sentence"],
                 "audio_path": audio_rel,
                 "hindi_reference": "",
