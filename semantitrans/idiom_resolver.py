@@ -40,6 +40,51 @@ MODE_OFF = "off"                # passthrough (baseline cascade)
 
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
 
+# Our trained figurative-vs-literal detector (built by train_idiom_detector.py).
+DETECTOR_DIR = config.ROOT_DIR / "models" / "idiom-detector"
+
+
+class _Detector:
+    """Lazy wrapper around our fine-tuned figurative/literal classifier.
+
+    Given (idiom, sentence) it returns True when the idiom is used figuratively.
+    If the model dir is missing or transformers/torch aren't installed, every
+    call returns True so the resolver degrades to its rule-based behavior.
+    """
+
+    def __init__(self):
+        self._model = None
+        self._tok = None
+        self._ok = DETECTOR_DIR.exists()
+        if not self._ok:
+            logger.info("No trained detector at %s; resolver gates nothing", DETECTOR_DIR)
+
+    def _ensure(self):
+        if self._model is not None or not self._ok:
+            return
+        try:
+            from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+            self._tok = AutoTokenizer.from_pretrained(str(DETECTOR_DIR))
+            self._model = AutoModelForSequenceClassification.from_pretrained(str(DETECTOR_DIR)).eval()
+            logger.info("Loaded idiom detector from %s", DETECTOR_DIR)
+        except Exception as e:  # missing torch, corrupt dir, etc.
+            logger.warning("Could not load detector (%s); gating disabled", e)
+            self._ok = False
+
+    def is_figurative(self, idiom: str, context: str) -> bool:
+        if not self._ok:
+            return True
+        self._ensure()
+        if self._model is None:
+            return True
+        import torch
+
+        inputs = self._tok(idiom, context, return_tensors="pt", truncation=True, max_length=128)
+        with torch.no_grad():
+            logits = self._model(**inputs).logits
+        return int(logits.argmax(-1)) == 1  # 1 == figurative
+
 
 @dataclass
 class Detection:
@@ -118,9 +163,11 @@ class IdiomResolver:
         gloss_kb_path: str | Path | None = None,
         mode: str = MODE_SUBSTITUTE,
         use_lemmas: bool = True,
+        use_detector: bool = True,
     ):
         self.mode = mode
         self.normalizer = _Normalizer(use_lemmas=use_lemmas)
+        self.detector = _Detector() if use_detector else None
         self.glosses: dict[str, dict] = {}
         self._index: dict[tuple[str, ...], dict] = {}
         self._max_len = 1
@@ -177,6 +224,13 @@ class IdiomResolver:
                     continue
                 start = toks[i][1]
                 end = toks[i + span - 1][2]
+                # Skip injection when our detector says this usage is literal.
+                if self.detector is not None and not self.detector.is_figurative(
+                    entry["idiom"], text
+                ):
+                    i += span
+                    matched = True
+                    break
                 detections.append(
                     Detection(
                         idiom=entry["idiom"],

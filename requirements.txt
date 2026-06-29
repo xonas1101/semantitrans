@@ -5,11 +5,12 @@
 
 torch>=2.2,<3.0
 
-# Stage 1 — ASR
-openai-whisper>=20231117
+# Stage 1 — ASR (transformers Whisper backend) + audio decoding
+transformers>=4.40,<5.0
+librosa>=0.10.0
+soundfile>=0.12.0
 
 # Stage 3 — translation (MarianMT) + tokenizer deps
-transformers>=4.40,<5.0
 sentencepiece>=0.2.0
 sacremoses>=0.1.1
 

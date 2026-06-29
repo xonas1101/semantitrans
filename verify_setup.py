@@ -43,8 +43,9 @@ def main() -> int:
 
     # soft deps
     for mod, hint in [
-        ("whisper", "openai-whisper"),
         ("transformers", "transformers"),
+        ("librosa", "librosa (audio decode for Whisper)"),
+        ("soundfile", "soundfile"),
         ("sentencepiece", "sentencepiece"),
         ("datasets", "datasets"),
         ("pandas", "pandas"),

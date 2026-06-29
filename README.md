@@ -13,19 +13,41 @@ install). Local install instructions are further down.
 
 ```
 audio
- ─▶ [Stage 1] Whisper ASR (pretrained, frozen)            → English transcript
- ─▶ [Stage 2] Idiom-aware resolution module (the new part) → literalized English
- ─▶ [Stage 3] opus-mt-en-hi translation (pretrained)       → Hindi text
+ ─▶ [Stage 1] Whisper ASR (+ our fine-tune)               → English transcript
+ ─▶ [Stage 2] Idiom-aware resolution (+ our detector)      → literalized English
+ ─▶ [Stage 3] opus-mt-en-hi translation (+ our LoRA)       → Hindi text
 ```
 
-Stages 1 and 3 are off-the-shelf pretrained models, used as-is. The contribution
-is **Stage 2** plus a **purpose-built Hindi idiom test set** and evaluation.
+Every stage starts from a pretrained base but carries a component **we trained**
+ourselves (see *Models we trained* below). The contribution remains **Stage 2**
+plus a **purpose-built Hindi idiom test set** and evaluation.
 
-### What Stage 2 does (inference-time, no training)
+## Models we trained
+
+Each stage builds on a pretrained base (cited below) plus a component trained in
+this repo. Run them with the scripts named; trained artifacts land in `models/`
+and `adapters/` (git-ignored, re-trainable).
+
+| Stage | Base | What we trained | Script | Result |
+|-------|------|-----------------|--------|--------|
+| 1 ASR | `openai/whisper-tiny` | demonstrative fine-tune on a LibriSpeech slice | `train_whisper.py` | loads from `models/whisper-ft/` |
+| 2 detect | `distilbert-base-uncased` | **figurative-vs-literal idiom classifier** on MAGPIE | `train_idiom_detector.py` | 95.0% acc / 0.97 F1 → `models/idiom-detector/` |
+| 3 MT | `Helsinki-NLP/opus-mt-en-hi` | LoRA adapter on idiom-containing EN-HI pairs | `train_lora.py` | `adapters/opus-mt-en-hi-idioms/` |
+
+> **Honest framing.** Stage 1 is a small fine-tune (not a from-scratch ASR) and
+> won't beat the base on general audio — it exists so stage 1 has a trained
+> component. Stage 3's LoRA is thin (idiom pairs are rare in general corpora).
+> The **stage-2 detector is the substantive trained model**: it gates gloss
+> injection so idioms used *literally* are left alone. All load automatically if
+> present and degrade gracefully to the pretrained base if absent.
+
+### What Stage 2 does
 
 1. **Detect** idioms in the transcript by matching an idiom inventory (the gloss
    KB, built from the MAGPIE inventory) over a normalized token stream
-   (lemmatized via spaCy when available, surface-normalized otherwise).
+   (lemmatized via spaCy when available, surface-normalized otherwise), then
+   **our trained classifier** (`train_idiom_detector.py`) decides whether each
+   match is figurative or literal — only figurative usages are resolved.
 2. **Resolve** each idiom to a literal paraphrase via a gloss knowledge base
    (IdiomKB-style lookup): `idiom → literal meaning`.
 3. **Inject** that meaning into the text sent to the translator, either by
@@ -148,13 +170,19 @@ Report it as exactly that.
 | `run.py` | CLI (audio → Hindi) |
 | `build_glosses.py` | gloss KB audit / expand / merge |
 | `build_testset.py` · `run_testset.py` · `evaluate.py` | test set + eval |
-| `train_lora.py` | optional LoRA adapter |
+| `train_idiom_detector.py` | **Stage 2 — train the figurative/literal detector** |
+| `train_whisper.py` | Stage 1 — fine-tune Whisper |
+| `train_lora.py` | Stage 3 — LoRA adapter on opus-mt-en-hi |
 
 ## Credits / licenses
 
 - **Whisper** — Radford et al. 2022 (MIT).
+- **DistilBERT** — Sanh et al. 2019 (Apache-2.0); base for the idiom detector.
 - **opus-mt-en-hi** — Tiedemann & Thottingal 2020, Helsinki-NLP (Apache-2.0).
-- **MAGPIE** — Haagsma et al. 2020; `gsarti/magpie` (CC-BY-4.0).
+- **MAGPIE** — Haagsma et al. 2020 (CC-BY-4.0); detector trained on the
+  `MAGPIE_filtered_split_typebased.jsonl` release.
+- **LibriSpeech** — Panayotov et al. 2015 (CC-BY-4.0); Whisper fine-tune data.
+- **IIT-B EN-HI** — Kunchukuttan et al. 2018 (`cfilt/iitb-english-hindi`); LoRA data.
 - Method context: **IdiomKB** (2024); **Baziotis et al.** EACL 2023
   (literal-translation-error metric); **Zaitova et al.** ACL 2025 (TTS-based
   idiom speech-translation test set); Dankers et al. 2022.

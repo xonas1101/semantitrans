@@ -33,9 +33,11 @@ logger = logging.getLogger("train_lora")
 def build_pairs(dataset_name: str, max_pairs: int, literalize: str):
     from datasets import load_dataset
 
-    resolver = IdiomResolver(mode=literalize) if literalize != MODE_OFF else None
+    # use_detector=False: for training data we literalize every idiom occurrence,
+    # not just figurative ones, so the adapter sees the full gloss-injected slice.
+    resolver = IdiomResolver(mode=literalize, use_detector=False) if literalize != MODE_OFF else None
     # idiom inventory keys for filtering
-    inv = IdiomResolver(mode=MODE_OFF)._index  # noqa: SLF001 - reuse index
+    inv = IdiomResolver(mode=MODE_OFF, use_detector=False)._index  # noqa: SLF001 - reuse index
     keys = set(inv.keys())
 
     logger.info("Loading %s ...", dataset_name)

@@ -24,9 +24,10 @@ def main() -> int:
     config.log_device()
 
     logger.info("Downloading Whisper '%s' ...", args.whisper)
-    import whisper
+    from transformers import WhisperForConditionalGeneration, WhisperProcessor
 
-    whisper.load_model(args.whisper, device="cpu")  # download only; device set at runtime
+    WhisperProcessor.from_pretrained(args.whisper)
+    WhisperForConditionalGeneration.from_pretrained(args.whisper)
 
     logger.info("Downloading translator '%s' ...", args.translator)
     from transformers import AutoModelForSeq2SeqLM, AutoTokenizer

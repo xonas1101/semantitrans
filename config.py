@@ -35,9 +35,13 @@ for _d in (DATA_DIR, TESTSET_DIR, AUDIO_DIR, GLOSS_DIR):
 # --------------------------------------------------------------------------- #
 # Model identifiers (all pretrained; cited in README)
 # --------------------------------------------------------------------------- #
-# Stage 1 — ASR. "small" is a good speed/quality tradeoff on a 4060; use
-# WHISPER_MODEL=medium for higher accuracy. Override via env var.
-WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
+# Stage 1 — ASR (transformers Whisper id). "openai/whisper-small" is a good
+# speed/quality tradeoff; use openai/whisper-medium for higher accuracy.
+WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "openai/whisper-small")
+
+# OUR fine-tuned Whisper checkpoint (built by train_whisper.py). Loaded in place
+# of WHISPER_MODEL when this directory exists.
+WHISPER_FT_DIR = ROOT_DIR / "models" / "whisper-ft"
 
 # Stage 3 — EN->HI translation (MarianMT, Apache-2.0).
 TRANSLATOR_MODEL = os.environ.get("TRANSLATOR_MODEL", "Helsinki-NLP/opus-mt-en-hi")
