@@ -20,6 +20,11 @@ Everything in this project exists to transmit meaning, not words.
 Live demo, "Translate" tab: say an idiom, toggle idiom mode **off** vs
 **substitute** — literal nonsense vs correct meaning.
 
+Gold-reference results (250 annotated items): baseline renders **48%** of
+idioms literally; substitution cuts that to **13.5%** (LTE metric). On
+literal-usage sentences all modes score identically — the detector gate
+causes zero over-correction. [full numbers: `KEY_RESULTS.md`]
+
 ## 3. Semantic communication (1 min)
 
 Classical (Shannon) communication reproduces the sender's **bits**; success =

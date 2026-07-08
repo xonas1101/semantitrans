@@ -33,6 +33,7 @@ and `adapters/` (git-ignored, re-trainable).
 | 1 ASR | `openai/whisper-tiny` | demonstrative fine-tune on a LibriSpeech slice | `train_whisper.py` | loads from `models/whisper-ft/` |
 | 2 detect | `distilbert-base-uncased` | **figurative-vs-literal idiom classifier** on MAGPIE | `train_idiom_detector.py` | 95.0% acc / 0.97 F1 → `models/idiom-detector/` |
 | 3 MT | `Helsinki-NLP/opus-mt-en-hi` | LoRA adapter on idiom-containing EN-HI pairs | `train_lora.py` | `adapters/opus-mt-en-hi-idioms/` |
+| channel | — (from scratch) | **semantic channel codec** (DeepSC-style, MAGPIE sentences) | `train_semcodec.py` | `models/semcodec/` |
 
 > **Honest framing.** Stage 1 is a small fine-tune (not a from-scratch ASR) and
 > won't beat the base on general audio — it exists so stage 1 has a trained
@@ -141,6 +142,30 @@ python evaluate.py --comet              # also COMET (~2GB, GPU recommended)
 by Baziotis et al. EACL 2023; needs the optional `literal_trap_hi` column), and
 optional COMET.
 
+## Semantic communication over a noisy channel
+
+Semantic communication transmits the **meaning** of a message in the fewest
+bits, instead of reproducing the signal bit-for-bit. `semcom_eval.py` simulates
+an AWGN wireless channel and compares three ways to send an utterance:
+the raw **waveform** (~1.7 Mbit/msg), the idiom-resolved **meaning as text
+bits** over BPSK (~700 bits — 2418× fewer), and **our from-scratch semantic
+channel codec** (transformer encoder → channel symbols → AWGN → transformer
+decoder, trained across random SNRs; ~9 kbit). Result: text bits deliver the
+meaning perfectly on a good channel; below ~3 dB they collapse, while the
+learned codec degrades gracefully and matches the full waveform at 0 dB with
+183× fewer bits.
+
+```bash
+python noise_eval.py                    # WER vs SNR (motivation)
+python train_semcodec.py                # train the codec (CPU-friendly; --resume)
+python semcom_eval.py                   # 3-scheme comparison → data/testset/semcom_snr.*
+python semcom_eval.py --gold            # score against gold hindi_reference
+python app.py                           # web UI incl. live "Noisy channel" tab
+```
+
+All result plots, raw numbers, and takeaways: **`results/`**
+(start with `results/KEY_RESULTS.md`).
+
 ## Gloss knowledge base
 
 `data/glosses/idiom_glosses.json` ships a small, project-authored seed of common
@@ -176,6 +201,10 @@ Report it as exactly that.
 | `train_idiom_detector.py` | **Stage 2 — train the figurative/literal detector** |
 | `train_whisper.py` | Stage 1 — fine-tune Whisper |
 | `train_lora.py` | Stage 3 — LoRA adapter on opus-mt-en-hi |
+| `semantitrans/semcodec.py` · `train_semcodec.py` | **semantic channel codec (from scratch)** |
+| `noise_eval.py` · `semcom_eval.py` | noisy-channel simulation + 3-scheme semcom eval |
+| `app.py` | Gradio web UI (translate + noisy-channel demo) |
+| `results/` | all plots, numbers, takeaways (`KEY_RESULTS.md`), speaker script |
 
 ## Credits / licenses
 
@@ -187,6 +216,8 @@ Report it as exactly that.
   `MAGPIE_filtered_split_typebased.jsonl` release.
 - **LibriSpeech** — Panayotov et al. 2015 (CC-BY-4.0); Whisper fine-tune data.
 - **IIT-B EN-HI** — Kunchukuttan et al. 2018 (`cfilt/iitb-english-hindi`); LoRA data.
+- **DeepSC** — Xie et al. 2021 (IEEE TSP); the semantic-communication
+  paradigm our channel codec implements (our own code and weights).
 - Method context: **IdiomKB** (2024); **Baziotis et al.** EACL 2023
   (literal-translation-error metric); **Zaitova et al.** ACL 2025 (TTS-based
   idiom speech-translation test set); Dankers et al. 2022.

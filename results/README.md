@@ -3,12 +3,17 @@
 All plots and raw numbers in one place. Each result has a matching
 `*_summary.txt` with the takeaway in plain words.
 
+**Start with `KEY_RESULTS.md` — every important number with its meaning, in one file.**
+`PRESENTATION.md` is the 5-minute speaker script.
+
 | Result | Plot | Data | Summary |
 |---|---|---|---|
 | Idiom detector accuracy | `detector_cm.png` | — | `detector_summary.txt` |
 | Test-set composition | `testset.png` | — | (250 clips: 200 figurative + 50 literal) |
 | ASR robustness (WER vs SNR) | `wer_snr.png` | `wer_snr.csv` | `wer_snr_summary.txt` |
-| Semantic communication (3 schemes vs SNR) | `semcom_snr.png` | `semcom_snr.csv` | `semcom_summary.txt` |
+| Semantic communication (robustness) | `semcom_snr.png` | `semcom_snr.csv` | `semcom_summary.txt` |
+| Semantic communication (vs gold refs) | `semcom_snr_gold.png` | `semcom_snr_gold.csv` | `KEY_RESULTS.md` §6 |
+| Idiom-aware vs baseline + LTE (gold) | — | manifest.csv | `KEY_RESULTS.md` §1–2 |
 
 ## Pipeline
 
