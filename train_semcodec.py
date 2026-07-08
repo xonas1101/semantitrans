@@ -63,7 +63,7 @@ def batches(ids_list, batch_size, shuffle=True):
 
 
 def train(sents: list[str], vocab: Vocab, epochs: int, batch_size: int, lr: float,
-          snr_range=(-4.0, 12.0), log_every: int = 50):
+          snr_range=(-4.0, 12.0), log_every: int = 50, model=None):
     import torch
     import torch.nn as nn
 
@@ -72,7 +72,8 @@ def train(sents: list[str], vocab: Vocab, epochs: int, batch_size: int, lr: floa
     n_val = max(1, len(ids_list) // 20)
     val, tr = ids_list[:n_val], ids_list[n_val:]
 
-    model = SemCodecModel(vocab_size=len(vocab.itos))
+    if model is None:
+        model = SemCodecModel(vocab_size=len(vocab.itos))
     opt = torch.optim.AdamW(model.parameters(), lr=lr)
     loss_fn = nn.CrossEntropyLoss(ignore_index=PAD)
 
@@ -129,6 +130,8 @@ def main() -> int:
     ap.add_argument("--epochs", type=int, default=8)
     ap.add_argument("--batch-size", type=int, default=64)
     ap.add_argument("--lr", type=float, default=3e-4)
+    ap.add_argument("--resume", action="store_true",
+                    help="continue training from the saved models/semcodec checkpoint")
     ap.add_argument("--selfcheck", action="store_true")
     args = ap.parse_args()
 
@@ -139,8 +142,16 @@ def main() -> int:
 
     sents = load_sentences(args.max_sents)
     logger.info("Training on %d sentences", len(sents))
-    vocab = build_vocab(sents, args.vocab_size)
-    model = train(sents, vocab, args.epochs, args.batch_size, args.lr)
+    model = None
+    if args.resume:
+        # must reuse the saved vocab or the embedding indices won't line up
+        vocab = Vocab.load(SEMCODEC_DIR / "vocab.json")
+        codec = SemCodec.load(SEMCODEC_DIR)
+        model = codec.model.train()
+        logger.info("Resumed from %s (vocab %d)", SEMCODEC_DIR, len(vocab.itos))
+    else:
+        vocab = build_vocab(sents, args.vocab_size)
+    model = train(sents, vocab, args.epochs, args.batch_size, args.lr, model=model)
 
     SEMCODEC_DIR.mkdir(parents=True, exist_ok=True)
     vocab.save(SEMCODEC_DIR / "vocab.json")
