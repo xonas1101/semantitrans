@@ -40,15 +40,20 @@ def main() -> int:
     args = ap.parse_args()
 
     df = pd.read_csv(args.manifest, dtype=str).fillna("")
-    if args.limit:
-        df = df.head(args.limit)
+    # --limit only shrinks the work set; the full manifest is always written back
+    # so a partial run never clobbers gold/predictions for the untouched rows.
+    work_idx = df.index[: args.limit] if args.limit else df.index
 
     pipe = Pipeline(idiom_mode=args.mode, use_lora=args.lora, use_lemmas=not args.no_lemmas)
 
     col = f"pred_{args.mode}" + ("_lora" if args.lora else "")
     inter_col = f"inter_{args.mode}"
-    preds, inters = [], []
-    for _, row in df.iterrows():
+    if col not in df.columns:
+        df[col] = ""
+    if inter_col not in df.columns:
+        df[inter_col] = ""
+    for i in work_idx:
+        row = df.loc[i]
         if args.from_text:
             res = pipe.translate_text(row["english_source"])
         else:
@@ -58,12 +63,10 @@ def main() -> int:
                 res = pipe.translate_text(row["english_source"])
             else:
                 res = pipe.run(str(audio))
-        preds.append(res.hindi)
-        inters.append(res.intermediate)
+        df.at[i, col] = res.hindi
+        df.at[i, inter_col] = res.intermediate
         logger.info("%s: %s", row["id"], res.hindi)
 
-    df[inter_col] = inters
-    df[col] = preds
     df.to_csv(args.manifest, index=False)
     logger.info("Wrote column '%s' -> %s", col, args.manifest)
     return 0
