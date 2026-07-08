@@ -1,0 +1,20 @@
+IDIOM DETECTOR: FIGURATIVE vs LITERAL CLASSIFICATION (train_idiom_detector.py)
+==============================================================================
+Plot: detector_cm.png (confusion matrix on held-out MAGPIE data)
+
+A DistilBERT classifier fine-tuned by us on the MAGPIE corpus decides whether
+a matched idiom is used FIGURATIVELY ("kicked the bucket" = died) or LITERALLY
+("kicked the bucket across the yard"). Only figurative uses get their meaning
+substituted before translation — this gating prevents the system from
+"correcting" idioms that were meant literally.
+
+  Held-out accuracy : 0.965
+  F1 (figurative)   : 0.976
+
+Gating rule: substitution is suppressed only when p(literal) >= 0.70, since
+idioms are figurative by default (raw argmax was too conservative on
+borderline cases).
+
+Companion plot: testset.png — composition of our evaluation set
+(250 TTS clips: 200 figurative + 50 literal idiom usages, all covered by the
+gloss knowledge base).

@@ -1,0 +1,22 @@
+ASR ROBUSTNESS: WORD ERROR RATE vs CHANNEL SNR (noise_eval.py)
+==============================================================
+Plot: wer_snr.png   Data: wer_snr.csv   (n = 60 clips)
+
+Additive white Gaussian noise (AWGN) is injected into the test-set audio at a
+range of SNRs to simulate transmission over a progressively worse wireless
+channel; Whisper ASR (stage 1) is re-run on the degraded audio.
+
+  SNR (dB)   mean WER
+   clean       0.10
+    30         0.12
+    20         0.15
+    10         0.37
+     5         0.60
+     0         0.83
+    -5         1.05
+
+TAKEAWAYS
+- Clean-audio WER is ~10%; the curve rises monotonically as the channel
+  degrades, passing 100% (more errors than reference words) at -5 dB.
+- This motivates the semantic-communication experiment (semcom_summary.txt):
+  if the raw signal is this fragile, transmit the extracted MEANING instead.
