@@ -4,6 +4,8 @@ All plots and raw numbers in one place. Each result has a matching
 `*_summary.txt` with the takeaway in plain words.
 
 **Start with `KEY_RESULTS.md` — every important number with its meaning, in one file.**
+`REPORT.md` is the full project report with a comparative study against
+published work (DeepSC, IdiomKB, Baziotis 2023, Zaitova 2025, ...).
 `PRESENTATION.md` is the 5-minute speaker script.
 
 | Result | Plot | Data | Summary |

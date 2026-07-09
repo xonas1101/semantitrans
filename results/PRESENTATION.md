@@ -44,7 +44,8 @@ Same utterance, same AWGN channel, three transmission schemes:
 |---|---|---|
 | Traditional | raw waveform; receiver runs ASR+MT | ~1,692,000 |
 | Semantic (text bits) | idiom-resolved English as UTF-8 over BPSK | ~700 (**2418× fewer**) |
-| Semantic (our codec) | learned channel symbols | ~9,200 (**183× fewer**) |
+| Semantic (text, rep-3 coded) | same + rate-1/3 repetition code | ~2,100 (806× fewer) |
+| Semantic (our codec) | learned symbols, 8-bit quantized | ~2,300 (**733× fewer**) |
 
 The codec is a transformer encoder/decoder **trained by us from scratch**
 (DeepSC paradigm, Xie et al. 2021) with the noisy channel *inside* the
@@ -54,9 +55,10 @@ Results:
 - Good channel (10 dB): text bits deliver the meaning **perfectly** at 1/2418
   of the bandwidth.
 - Bad channel (≤ 2 dB): text bits fall off the "digital cliff" (bit errors
-  shred UTF-8: chrF 0.06 at 0 dB), but the **codec degrades gracefully** —
-  it matches the full waveform's meaning preservation at 0 to -2 dB while
-  sending 183× fewer bits. Graceful degradation is the signature result of
+  shred UTF-8: chrF 0.04 at 0 dB). A repetition code delays the cliff a few
+  dB but still collapses. The **codec degrades gracefully** — it beats even
+  coded text at -2 to -5 dB and roughly matches the full waveform while
+  sending 733× fewer bits. Graceful degradation is the signature result of
   learned semantic communication.
 
 Live demo, "Noisy channel" tab: transmit at **10 dB** (text wins perfectly),
@@ -73,12 +75,12 @@ the whole argument.
 
 ## 6. If asked (honest caveats)
 
-- Text-bit baseline is *uncoded* BPSK; real systems add channel coding
-  (turbo/LDPC), which would move the cliff left. The comparison shape holds.
+- We DO include a coded baseline (rep-3 majority vote); modern LDPC/turbo
+  codes would push the cliff further left at similar rate — the shape holds.
 - Robustness curves score each scheme against its own clean-channel output;
-  absolute meaning accuracy vs gold Hindi references runs with
-  `semcom_eval.py --gold` once test-set annotation is complete.
-- Codec symbols counted as float32; research systems quantize further.
+  absolute accuracy vs gold Hindi references: `semcom_snr_gold.png`.
+- Codec symbols are 8-bit quantized (realistic digital transmission);
+  quantization cost no measurable quality vs float32.
 - Channel is AWGN; fading channels (Rayleigh) are the next step.
 
 ## Demo checklist

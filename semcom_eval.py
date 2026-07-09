@@ -71,9 +71,17 @@ def transmit_bits(data: bytes, ber: float, rng) -> bytes:
     return np.packbits(bits ^ flips).tobytes()
 
 
-def transmit_text(text: str, snr_db: float, rng) -> str:
-    """Send UTF-8 text over the BPSK/AWGN channel; undecodable bytes -> U+FFFD."""
-    received = transmit_bits(text.encode("utf-8"), bpsk_ber(snr_db), rng)
+def transmit_text(text: str, snr_db: float, rng, rep3: bool = False) -> str:
+    """Send UTF-8 text over the BPSK/AWGN channel; undecodable bytes -> U+FFFD.
+
+    rep3=True models a rate-1/3 repetition code with majority-vote decoding
+    (3x the bits, residual bit-error prob 3p^2 - 2p^3) — a fair *coded*
+    digital baseline instead of raw uncoded BPSK.
+    """
+    ber = bpsk_ber(snr_db)
+    if rep3:
+        ber = 3 * ber**2 - 2 * ber**3
+    received = transmit_bits(text.encode("utf-8"), ber, rng)
     return received.decode("utf-8", errors="replace")
 
 
@@ -112,6 +120,8 @@ def _selfcheck() -> int:
     assert chrf("abcdef", "uvwxyz") == 0.0
     assert 0.0 < chrf("the cat sat", "the cat sit") < 1.0
     assert bpsk_ber(10) < 1e-5 < bpsk_ber(0) < bpsk_ber(-5) < 0.5
+    p = bpsk_ber(0)
+    assert 3 * p**2 - 2 * p**3 < p  # rep-3 majority vote always reduces BER
     print("semcom_eval selfcheck OK")
     return 0
 
@@ -194,33 +204,37 @@ def main() -> int:
     logger.info("Mean bits/message: traditional=%.0f semantic=%.0f codec=%.0f",
                 bits_trad, bits_sem, bits_codec)
 
-    results = []  # (snr, ber, chrf_trad, chrf_sem, chrf_codec)
+    results = []  # (snr, ber, chrf_trad, chrf_sem, chrf_coded, chrf_codec)
     for snr in args.snr:
         ber = bpsk_ber(snr)
-        st, ss, sc = [], [], []
+        st, ss, sr, sc = [], [], [], []
         for c in clips:
             hi_trad = asr_translate(add_awgn(c["x"], snr))
             hi_sem = pipe.translator.translate(transmit_text(c["sem_msg"], snr, rng))
+            hi_coded = pipe.translator.translate(transmit_text(c["sem_msg"], snr, rng, rep3=True))
             st.append(chrf(c["ref_trad"], hi_trad))
             ss.append(chrf(c["ref_sem"], hi_sem))
+            sr.append(chrf(c["ref_sem"], hi_coded))
             if codec:
                 hi_codec = pipe.translator.translate(codec.reconstruct(c["sem_msg"], snr))
                 sc.append(chrf(c["ref_codec"], hi_codec))
         results.append((snr, ber, float(np.mean(st)), float(np.mean(ss)),
-                        float(np.mean(sc)) if sc else None))
-        logger.info("SNR=%g dB  BER=%.2e  chrF trad=%.3f sem=%.3f codec=%s",
-                    snr, ber, results[-1][2], results[-1][3],
-                    f"{results[-1][4]:.3f}" if codec else "n/a")
+                        float(np.mean(sr)), float(np.mean(sc)) if sc else None))
+        logger.info("SNR=%g dB  BER=%.2e  chrF trad=%.3f sem=%.3f coded=%.3f codec=%s",
+                    snr, ber, results[-1][2], results[-1][3], results[-1][4],
+                    f"{results[-1][5]:.3f}" if codec else "n/a")
 
     out_csv = config.TESTSET_DIR / "semcom_snr.csv"
     with out_csv.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["SNR_dB", "BER", "chrF_traditional", "chrF_semantic", "chrF_codec",
-                    "bits_traditional", "bits_semantic", "bits_codec", "n"])
-        for snr, ber, ct, cs, cc in results:
-            w.writerow([snr, f"{ber:.3e}", f"{ct:.4f}", f"{cs:.4f}",
+        w.writerow(["SNR_dB", "BER", "chrF_traditional", "chrF_semantic",
+                    "chrF_semantic_rep3", "chrF_codec",
+                    "bits_traditional", "bits_semantic", "bits_semantic_rep3",
+                    "bits_codec", "n"])
+        for snr, ber, ct, cs, cr, cc in results:
+            w.writerow([snr, f"{ber:.3e}", f"{ct:.4f}", f"{cs:.4f}", f"{cr:.4f}",
                         f"{cc:.4f}" if cc is not None else "",
-                        f"{bits_trad:.0f}", f"{bits_sem:.0f}",
+                        f"{bits_trad:.0f}", f"{bits_sem:.0f}", f"{3 * bits_sem:.0f}",
                         f"{bits_codec:.0f}" if codec else "", len(clips)])
     logger.info("Wrote %s", out_csv)
 
@@ -231,9 +245,10 @@ def main() -> int:
     pts = sorted(results)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4), gridspec_kw={"width_ratios": [2, 1]})
     ax1.plot([p[0] for p in pts], [p[2] for p in pts], "o-", label="traditional (waveform bits)")
-    ax1.plot([p[0] for p in pts], [p[3] for p in pts], "s-", label="semantic (text bits, BPSK)")
+    ax1.plot([p[0] for p in pts], [p[3] for p in pts], "s-", label="semantic (text bits, uncoded)")
+    ax1.plot([p[0] for p in pts], [p[4] for p in pts], "d-", label="semantic (text bits, rep-3 coded)")
     if codec:
-        ax1.plot([p[0] for p in pts], [p[4] for p in pts], "^-", label="semantic (our learned codec)")
+        ax1.plot([p[0] for p in pts], [p[5] for p in pts], "^-", label="semantic (our learned codec)")
     ax1.set_xlabel("channel SNR (dB)")
     ax1.set_ylabel("meaning preservation (chrF)")
     ax1.set_title(f"Semantic vs traditional transmission (n={len(clips)})")
@@ -241,7 +256,7 @@ def main() -> int:
     ax1.set_ylim(0, 1.05)
     ax1.grid(True, alpha=0.3)
     ax1.legend()
-    labels, vals = ["traditional", "semantic"], [bits_trad, bits_sem]
+    labels, vals = ["traditional", "semantic", "sem rep-3"], [bits_trad, bits_sem, 3 * bits_sem]
     if codec:
         labels.append("codec")
         vals.append(bits_codec)

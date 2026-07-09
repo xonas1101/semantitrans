@@ -3,44 +3,48 @@ SEMANTIC COMMUNICATION OVER A NOISY WIRELESS CHANNEL (semcom_eval.py)
 Plot: semcom_snr.png   Data: semcom_snr.csv   (n = 25 test clips)
 
 Semantic communication = transmitting the MEANING of a message in the fewest
-bits, instead of reproducing the exact signal bit-for-bit. We compare three
+bits, instead of reproducing the exact signal bit-for-bit. We compare four
 ways of sending an English utterance to a Hindi-speaking receiver across the
 same AWGN channel, at channel SNRs from 10 dB (good) to -5 dB (very bad):
 
 1. TRADITIONAL  — transmit the raw speech waveform (16 kHz x 16-bit PCM).
                   Receiver runs ASR + translation.        ~1,692,058 bits/msg
 2. SEMANTIC     — sender runs ASR + idiom resolution, transmits only the
-   (text bits)    meaning as UTF-8 text over BPSK.              ~700 bits/msg
-3. LEARNED      — OUR from-scratch semantic channel codec (transformer
-   CODEC          encoder -> 16 float symbols per token -> AWGN -> transformer
-                  decoder), trained across random SNRs.       ~9,236 bits/msg
+   (text bits)    meaning as UTF-8 text over BPSK, uncoded.     ~700 bits/msg
+3. SEMANTIC     — same text protected by a rate-1/3 repetition code with
+   (rep-3 coded)  majority-vote decoding (fair coded baseline). ~2,100 bits/msg
+4. LEARNED      — OUR from-scratch semantic channel codec (transformer
+   CODEC          encoder -> 16 symbols per token, 8-BIT QUANTIZED -> AWGN ->
+                  transformer decoder), random-SNR training.   ~2,309 bits/msg
 
 Meaning preservation (chrF of received Hindi vs the scheme's clean-channel
 output — i.e. pure channel robustness):
 
-  SNR(dB)   BER        traditional   text bits   learned codec
-    10      3.9e-06      0.53          1.00         0.61
-     5      6.0e-03      0.33          0.60         0.43
-     2      3.8e-02      0.28          0.20         0.22
-     0      7.9e-02      0.20          0.06         0.18
-    -2      1.3e-01      0.17          0.03         0.15
-    -5      2.1e-01      0.14          0.01         0.10
+  SNR(dB)   BER        traditional   text bits   rep-3 coded   learned codec
+    10      3.9e-06      0.53          1.00         1.00          0.63
+     5      6.0e-03      0.33          0.65         0.98          0.42
+     2      3.8e-02      0.28          0.12         0.69          0.29
+     0      7.9e-02      0.20          0.04         0.37          0.19
+    -2      1.3e-01      0.17          0.02         0.16          0.13
+    -5      2.1e-01      0.14          0.01         0.03          0.10
 
 TAKEAWAYS
 - On a good channel, transmitting meaning instead of signal delivers the
   message PERFECTLY in 700 bits instead of 1.7 Mbit -> 2418x fewer bits.
-- Raw digital text collapses below ~3 dB: once the bit error rate corrupts
-  UTF-8, the meaning is destroyed (the classic "digital cliff").
-- Our learned codec degrades GRACEFULLY: at 0 to -2 dB it preserves meaning
-  about as well as transmitting the full waveform, using 183x fewer bits.
-  This graceful degradation is the signature result of learned semantic
-  communication (DeepSC, Xie et al. 2021).
+- Raw digital text collapses below ~3 dB ("digital cliff"). Adding a rep-3
+  channel code (3x the bits) pushes the cliff ~3-4 dB left — but it still
+  collapses: at -5 dB the coded text is at 0.03. Coding DELAYS the cliff,
+  it does not remove it.
+- Our learned codec degrades GRACEFULLY with no cliff: at -2 to -5 dB it
+  beats even the coded text and roughly matches the full waveform, using
+  ~733x fewer bits (8-bit quantized symbols). Graceful degradation is the
+  signature result of learned semantic communication (DeepSC, Xie et al. 2021).
+- 8-bit symbol quantization cost nothing: codec scores are unchanged vs the
+  earlier float32 accounting while bits/msg dropped 9,236 -> 2,309.
 
 CAVEATS (say these if asked)
-- The traditional text baseline is uncoded BPSK; real systems add channel
-  coding (e.g. turbo/LDPC), which would shift the crossover point left.
+- rep-3 is a simple code; modern LDPC/turbo codes would push the cliff
+  further left still, at similar rate. The shape of the argument holds.
 - Curves are scored against each scheme's own clean output (robustness, not
-  absolute translation quality). Absolute quality vs gold Hindi references
-  runs with `semcom_eval.py --gold` once the manifest annotation is complete.
-- Codec symbols are counted as float32 (32 bits each); research systems
-  quantize symbols further.
+  absolute translation quality). Absolute quality vs gold Hindi references:
+  semcom_snr_gold.png / .csv.

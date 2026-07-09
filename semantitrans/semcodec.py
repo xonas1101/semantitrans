@@ -106,10 +106,21 @@ class SemCodec:
         self.model = model.eval()
         self.vocab = vocab
 
+    Q_BITS = 8   # bits per transmitted symbol (uniform quantizer)
+    Q_CLIP = 3.0  # symbols are unit-average-power; clip at ~3 sigma
+
+    @classmethod
+    def quantize(cls, z: torch.Tensor) -> torch.Tensor:
+        """Uniform Q_BITS quantization — what actually crosses a digital channel."""
+        levels = 2 ** cls.Q_BITS - 1
+        zc = z.clamp(-cls.Q_CLIP, cls.Q_CLIP)
+        step = 2 * cls.Q_CLIP / levels
+        return torch.round(zc / step) * step
+
     @torch.no_grad()
     def reconstruct(self, text: str, snr_db: float | None) -> str:
         ids = torch.tensor([self.vocab.encode(text)])
-        z = self.model.channel(self.model.encode(ids), snr_db)
+        z = self.model.channel(self.quantize(self.model.encode(ids)), snr_db)
         out = [BOS]
         for _ in range(MAX_LEN - 1):
             logits = self.model.decode_logits(torch.tensor([out]), z)
@@ -120,7 +131,7 @@ class SemCodec:
         return self.vocab.decode(out)
 
     def bits_per_message(self, text: str) -> int:
-        return len(self.vocab.encode(text)) * self.model.k_symbols * 32  # float32 symbols
+        return len(self.vocab.encode(text)) * self.model.k_symbols * self.Q_BITS
 
     @classmethod
     def load(cls, dirpath: Path) -> "SemCodec":
