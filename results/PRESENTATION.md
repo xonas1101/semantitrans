@@ -56,10 +56,10 @@ Results:
   of the bandwidth.
 - Bad channel (≤ 2 dB): text bits fall off the "digital cliff" (bit errors
   shred UTF-8: chrF 0.04 at 0 dB). A repetition code delays the cliff a few
-  dB but still collapses. The **codec degrades gracefully** — it beats even
-  coded text at -2 to -5 dB and roughly matches the full waveform while
-  sending 733× fewer bits. Graceful degradation is the signature result of
-  learned semantic communication.
+  dB but still collapses. The **codec degrades gracefully** — it ties coded
+  text at -2 dB, is the only semantic scheme alive at -5 dB, and roughly
+  matches the full waveform while sending 733× fewer bits. Graceful
+  degradation is the signature result of learned semantic communication.
 
 Live demo, "Noisy channel" tab: transmit at **10 dB** (text wins perfectly),
 drag to **-2 dB**, transmit again (text garbles, codec survives). Two clicks =

@@ -63,7 +63,7 @@ def batches(ids_list, batch_size, shuffle=True):
 
 
 def train(sents: list[str], vocab: Vocab, epochs: int, batch_size: int, lr: float,
-          snr_range=(-4.0, 12.0), log_every: int = 50, model=None):
+          snr_range=(-4.0, 12.0), log_every: int = 50, model=None, save_dir=None):
     import torch
     import torch.nn as nn
 
@@ -75,7 +75,9 @@ def train(sents: list[str], vocab: Vocab, epochs: int, batch_size: int, lr: floa
     if model is None:
         model = SemCodecModel(vocab_size=len(vocab.itos))
     opt = torch.optim.AdamW(model.parameters(), lr=lr)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=epochs)
     loss_fn = nn.CrossEntropyLoss(ignore_index=PAD)
+    best_val = float("inf")
 
     def run_epoch(data, training: bool) -> float:
         model.train(training)
@@ -98,7 +100,13 @@ def train(sents: list[str], vocab: Vocab, epochs: int, batch_size: int, lr: floa
     for ep in range(1, epochs + 1):
         tr_loss = run_epoch(tr, True)
         val_loss = run_epoch(val, False)
-        logger.info("epoch %d/%d  train %.3f  val %.3f", ep, epochs, tr_loss, val_loss)
+        sched.step()
+        logger.info("epoch %d/%d  train %.3f  val %.3f  lr %.2e", ep, epochs,
+                    tr_loss, val_loss, sched.get_last_lr()[0])
+        if save_dir and val_loss < best_val:
+            best_val = val_loss
+            torch.save(model.state_dict(), save_dir / "model.pt")
+            logger.info("  new best val %.3f -> saved checkpoint", val_loss)
         codec = SemCodec(model, vocab)
         for s in sents[:2]:
             logger.info("  @5dB  %r -> %r", s, codec.reconstruct(s, 5.0))
@@ -151,12 +159,13 @@ def main() -> int:
         logger.info("Resumed from %s (vocab %d)", SEMCODEC_DIR, len(vocab.itos))
     else:
         vocab = build_vocab(sents, args.vocab_size)
-    model = train(sents, vocab, args.epochs, args.batch_size, args.lr, model=model)
-
+    # best-val checkpointing: train() writes model.pt whenever validation improves,
+    # so the saved codec is the best epoch, not the last one
     SEMCODEC_DIR.mkdir(parents=True, exist_ok=True)
     vocab.save(SEMCODEC_DIR / "vocab.json")
-    torch.save(model.state_dict(), SEMCODEC_DIR / "model.pt")
-    logger.info("Saved codec -> %s", SEMCODEC_DIR)
+    train(sents, vocab, args.epochs, args.batch_size, args.lr, model=model,
+          save_dir=SEMCODEC_DIR)
+    logger.info("Saved best-val codec -> %s", SEMCODEC_DIR)
     return 0
 
 

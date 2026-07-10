@@ -88,23 +88,24 @@ isolates pure channel robustness):
 
 | SNR (dB) | BER | traditional | semantic text | text rep-3 coded | our codec |
 |---|---|---|---|---|---|
-| 10 | 4e-06 | 0.53 | **1.00** | **1.00** | 0.63 |
-| 5 | 6e-03 | 0.33 | 0.65 | **0.98** | 0.42 |
+| 10 | 4e-06 | 0.53 | **1.00** | **1.00** | 0.58 |
+| 5 | 6e-03 | 0.33 | 0.65 | **0.98** | 0.41 |
 | 2 | 4e-02 | 0.28 | 0.12 | **0.69** | 0.29 |
-| 0 | 8e-02 | 0.20 | 0.04 | **0.37** | 0.19 |
-| -2 | 1e-01 | 0.17 | 0.02 | 0.16 | **0.13** |
-| -5 | 2e-01 | 0.14 | 0.01 | 0.03 | **0.10** |
+| 0 | 8e-02 | 0.20 | 0.04 | **0.37** | 0.17 |
+| -2 | 1e-01 | 0.17 | 0.02 | 0.16 | 0.15 |
+| -5 | 2e-01 | 0.14 | 0.01 | 0.03 | **0.09** |
 
 **Meaning:** on a good channel, text bits deliver meaning PERFECTLY at 1/2418
 the bandwidth. Below ~3 dB, uncoded text falls off the "digital cliff" (bit
 errors shred UTF-8: 0.04 at 0 dB). A fair rep-3 channel code (3× the bits)
 pushes the cliff ~3-4 dB left but still collapses (0.03 at -5 dB) — coding
 DELAYS the cliff, it does not remove it. Our from-scratch codec has NO cliff:
-trained with the noisy channel inside the loop, it degrades gracefully, beats
-even the coded text at -2 to -5 dB, and roughly matches the full 1.7-Mbit
-waveform while sending 733× fewer bits (8-bit quantized symbols; quantization
-cost nothing vs float32). Graceful degradation is the signature result of
-learned semantic communication (DeepSC paradigm, Xie et al. 2021).
+trained with the noisy channel inside the loop, it degrades gracefully, ties
+the coded text at -2 dB, is the only semantic scheme still working at -5 dB
+(0.09 vs 0.03), and roughly matches the full 1.7-Mbit waveform while sending
+733× fewer bits (8-bit quantized symbols; quantization cost nothing vs
+float32). Graceful degradation is the signature result of learned semantic
+communication (DeepSC paradigm, Xie et al. 2021).
 
 ## 6. Same experiment against gold references — absolute quality
 
@@ -116,16 +117,16 @@ so no scheme reaches 1.0 even on a clean channel):
 | SNR (dB) | traditional | semantic text | text rep-3 coded | our codec |
 |---|---|---|---|---|
 | 10 | 0.28 | **0.34** | **0.34** | 0.18 |
-| 5 | 0.22 | 0.29 | **0.34** | 0.15 |
-| 2 | 0.19 | 0.10 | **0.30** | 0.15 |
-| 0 | 0.16 | 0.04 | **0.21** | 0.10 |
-| -2 | **0.15** | 0.01 | 0.10 | 0.09 |
-| -5 | 0.12 | 0.01 | 0.03 | **0.08** |
+| 5 | 0.22 | 0.29 | **0.34** | 0.18 |
+| 2 | 0.19 | 0.10 | **0.30** | 0.13 |
+| 0 | 0.16 | 0.04 | **0.21** | 0.11 |
+| -2 | **0.15** | 0.01 | 0.10 | 0.10 |
+| -5 | 0.12 | 0.01 | 0.03 | **0.07** |
 
 **Meaning:** confirms the robustness picture with real references: semantic
 text wins clearly at usable SNRs (≥5 dB), and the rep-3 coded variant extends
 that lead down to 0 dB at 3× the bits. Below -2 dB even the coded text
-collapses while the codec holds — at -5 dB the codec beats coded text ~3×
+collapses while the codec holds — at -5 dB the codec beats coded text ~2.5×
 and approaches the waveform's quality at 733× fewer bits. The codec's lower
 ceiling at high SNR is its reconstruction paraphrasing — chrF counts
 character overlap, so a correct paraphrase scores low; an embedding-based

@@ -75,7 +75,7 @@ audio ─▶ Whisper ASR ─▶ idiom detection ─▶ gloss     channel   NLLB-
 | Idiom detector | DistilBERT | MAGPIE figurative/literal | 96.5% acc, F1 0.976 |
 | Whisper fine-tune | whisper-tiny | LibriSpeech slice | demonstrative |
 | LoRA adapter | opus-mt-en-hi | IIT-B idiom pairs (299) | thin, optional |
-| **Semantic channel codec** | **none — from scratch** | 60k MAGPIE sentences, 45 epochs | graceful degradation (§5) |
+| **Semantic channel codec** | **none — from scratch** | 60k MAGPIE sentences, 90 epochs (best-val checkpoint, cosine LR decay) | graceful degradation (§5) |
 
 All backbones are cited pretrained models (standard research practice); the
 codec is entirely our code and weights, following the DeepSC architecture
@@ -130,12 +130,12 @@ Meaning preservation (chrF vs each scheme's clean-channel output, n=25):
 
 | SNR (dB) | traditional | text uncoded | text rep-3 coded | our codec |
 |---|---|---|---|---|
-| 10 | 0.53 | **1.00** | **1.00** | 0.63 |
-| 5 | 0.33 | 0.65 | **0.98** | 0.42 |
+| 10 | 0.53 | **1.00** | **1.00** | 0.58 |
+| 5 | 0.33 | 0.65 | **0.98** | 0.41 |
 | 2 | 0.28 | 0.12 | **0.69** | 0.29 |
-| 0 | 0.20 | 0.04 | **0.37** | 0.19 |
-| -2 | 0.17 | 0.02 | 0.16 | **0.13** |
-| -5 | 0.14 | 0.01 | 0.03 | **0.10** |
+| 0 | 0.20 | 0.04 | **0.37** | 0.17 |
+| -2 | 0.17 | 0.02 | 0.16 | 0.15 |
+| -5 | 0.14 | 0.01 | 0.03 | **0.09** |
 
 - Good channel (10 dB): text bits deliver the meaning **perfectly** at 1/2418
   of the bandwidth.
@@ -144,9 +144,10 @@ Meaning preservation (chrF vs each scheme's clean-channel output, n=25):
   left but still collapses (0.03 at -5 dB); coding delays the cliff, it does
   not remove it.
 - **Our codec has no cliff**: trained with the channel in the loop, it degrades
-  gracefully, beats even the coded text at -2 to -5 dB, and roughly matches the
-  full 1.7-Mbit waveform at a small fraction of the bits. Graceful degradation
-  is the signature result of learned semantic communication.
+  gracefully, ties the coded text at -2 dB, is the only semantic scheme still
+  working at -5 dB (3× the coded text), and roughly matches the full 1.7-Mbit
+  waveform at a small fraction of the bits. Graceful degradation is the
+  signature result of learned semantic communication.
 
 (Full numbers: `KEY_RESULTS.md` and the CSVs in this folder.)
 
@@ -183,8 +184,9 @@ purpose-built gold-annotated Hindi idiom test set.
 - The channel is AWGN only; Rayleigh fading is the natural next step.
 - chrF under-credits the codec's paraphrases; an embedding-based semantic
   metric (LaBSE cosine / COMET) would score meaning directly.
-- The codec was saved at the last epoch (val loss 2.70) though validation
-  bottomed at 2.34 mid-run; best-val checkpointing + LR decay would improve it.
+- The codec still paraphrases (~28% reconstruction WER on a clean channel);
+  a larger model (d_model 256+) trained on GPU would raise its ceiling —
+  DeepSC-scale codecs reconstruct near-losslessly.
 - Gloss KB coverage is a seed set; scaling it (or borrowing IdiomKB with
   license attribution) widens idiom coverage.
 - Research-grade systems (DeepSC) use BLEU/sentence-similarity on 100k+
