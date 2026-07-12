@@ -21,11 +21,11 @@ Meaning preservation (chrF of received Hindi vs the scheme's clean-channel
 output — i.e. pure channel robustness):
 
   SNR(dB)   BER        traditional   text bits   rep-3 coded   learned codec
-    10      3.9e-06      0.53          1.00         1.00          0.58
-     5      6.0e-03      0.33          0.65         0.98          0.41
-     2      3.8e-02      0.28          0.12         0.69          0.29
+    10      3.9e-06      0.53          1.00         1.00          0.63
+     5      6.0e-03      0.33          0.65         0.98          0.35
+     2      3.8e-02      0.28          0.12         0.69          0.25
      0      7.9e-02      0.20          0.04         0.37          0.17
-    -2      1.3e-01      0.17          0.02         0.16          0.15
+    -2      1.3e-01      0.17          0.02         0.16          0.12
     -5      2.1e-01      0.14          0.01         0.03          0.09
 
 TAKEAWAYS
@@ -35,13 +35,36 @@ TAKEAWAYS
   channel code (3x the bits) pushes the cliff ~3-4 dB left — but it still
   collapses: at -5 dB the coded text is at 0.03. Coding DELAYS the cliff,
   it does not remove it.
-- Our learned codec degrades GRACEFULLY with no cliff: it ties the coded
-  text at -2 dB, is the only semantic scheme still working at -5 dB (0.09
+- Our learned codec degrades GRACEFULLY with no cliff: it is the only
+  semantic scheme still working at -5 dB (0.09
   vs 0.03), and roughly matches the full waveform using ~733x fewer bits
   (8-bit quantized symbols). Graceful degradation is the signature result
   of learned semantic communication (DeepSC, Xie et al. 2021).
 - 8-bit symbol quantization cost nothing: codec scores are unchanged vs the
   earlier float32 accounting while bits/msg dropped 9,236 -> 2,309.
+
+RAYLEIGH FADING (semcom_snr_rayleigh.png / _gold — the realistic channel)
+Quasi-static flat fading, perfect CSI, one fade per message. chrF:
+
+  SNR(dB)   traditional   text bits   rep-3 coded   learned codec
+    10        0.39          0.78         0.87          0.59
+     5        0.36          0.60         0.81          0.38
+     0        0.18          0.08         0.30          0.18
+    -5        0.11          0.02         0.08          0.12
+
+- Deep fades hurt digital text long before AWGN does (0.78 at 10 dB, not 1.0).
+- The codec's edge GROWS under fading: at -5 dB it beats everything,
+  including the full waveform. Random-SNR training ~ training on fading.
+
+WER VIEW (semcom_wer*.png): WER of received Hindi, same runs. Uncoded text
+below the cliff decodes to garbage LONGER than the reference — WER 7.3 at
+-2 dB (AWGN) vs codec 0.91. The cliff looks even worse in WER than chrF.
+
+SEMANTIC NOISE (semcom_semnoise.png / .csv): corrupt each sender-side word
+with prob p on a CLEAN channel. Text chrF 1.0 -> 0.43 as p goes 0 -> 0.3;
+codec falls FASTER (1.0 -> 0.26). Honest negative result: the codec fights
+channel noise, not meaning corruption — semantic noise must be fixed at the
+source (better ASR/idiom resolution), nothing downstream can undo it.
 
 CAVEATS (say these if asked)
 - rep-3 is a simple code; modern LDPC/turbo codes would push the cliff
@@ -49,3 +72,5 @@ CAVEATS (say these if asked)
 - Curves are scored against each scheme's own clean output (robustness, not
   absolute translation quality). Absolute quality vs gold Hindi references:
   semcom_snr_gold.png / .csv.
+- Rayleigh model is quasi-static flat fading with perfect CSI; no Doppler /
+  frequency selectivity.

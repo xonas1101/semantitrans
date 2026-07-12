@@ -33,6 +33,8 @@ Usage:
   python semcom_eval.py
   python semcom_eval.py --snr 20 10 5 0 -5 --max-clips 10
   python semcom_eval.py --gold          # score against gold hindi_reference
+  python semcom_eval.py --channel rayleigh   # flat Rayleigh fading (perfect CSI)
+  python semcom_eval.py --sem-noise 0 0.1 0.2 0.3  # sender-side semantic noise sweep
   python semcom_eval.py --selfcheck
 """
 
@@ -58,6 +60,32 @@ logger = logging.getLogger("semcom_eval")
 def bpsk_ber(snr_db: float) -> float:
     """Bit error rate of BPSK over AWGN at the given Eb/N0 (dB)."""
     return 0.5 * math.erfc(math.sqrt(10 ** (snr_db / 10)))
+
+
+def rayleigh_ber(snr_db: float) -> float:
+    """Average BPSK BER over flat Rayleigh fading (analytic, for the CSV)."""
+    g = 10 ** (snr_db / 10)
+    return 0.5 * (1 - math.sqrt(g / (1 + g)))
+
+
+def fading_snr_db(snr_db: float, rng) -> float:
+    """Quasi-static flat Rayleigh fading with perfect CSI: draw one |h|^2 ~ Exp(1)
+    per message; the whole message then sees an AWGN channel at the faded SNR.
+    """
+    return snr_db + 10 * math.log10(max(rng.exponential(1.0), 1e-12))
+
+
+def semantic_noise(text: str, p: float, rng, pool: list[str] | None = None) -> str:
+    """Semantic noise: each word independently replaced (prob p) by a random
+    word from `pool` (default: the sentence itself) — models sender-side
+    meaning corruption (misheard/ambiguous words), as distinct from channel noise.
+    """
+    if p <= 0:
+        return text
+    words = text.split()
+    pool = pool or words
+    return " ".join(pool[int(rng.integers(len(pool)))] if rng.random() < p else w
+                    for w in words)
 
 
 def transmit_bits(data: bytes, ber: float, rng) -> bytes:
@@ -122,6 +150,12 @@ def _selfcheck() -> int:
     assert bpsk_ber(10) < 1e-5 < bpsk_ber(0) < bpsk_ber(-5) < 0.5
     p = bpsk_ber(0)
     assert 3 * p**2 - 2 * p**3 < p  # rep-3 majority vote always reduces BER
+    assert rayleigh_ber(10) > bpsk_ber(10)  # fading is strictly worse than AWGN
+    assert rayleigh_ber(-5) < 0.5
+    fades = [fading_snr_db(0, rng) for _ in range(20000)]
+    assert abs(sum(10 ** (f / 10) for f in fades) / len(fades) - 1.0) < 0.05  # E|h|^2 = 1
+    assert semantic_noise("a b c", 0.0, rng) == "a b c"
+    assert semantic_noise("a b c d e f g h", 1.0, rng, pool=["x"]) == "x x x x x x x x"
     print("semcom_eval selfcheck OK")
     return 0
 
@@ -134,6 +168,11 @@ def main() -> int:
                     help="clips to evaluate (CPU translation is the bottleneck)")
     ap.add_argument("--gold", action="store_true",
                     help="score against manifest hindi_reference instead of clean-channel output")
+    ap.add_argument("--channel", choices=["awgn", "rayleigh"], default="awgn",
+                    help="rayleigh = quasi-static flat fading with perfect CSI")
+    ap.add_argument("--sem-noise", type=float, nargs="+", metavar="P",
+                    help="sweep sender-side semantic noise (word-corruption probs) "
+                         "on a clean channel instead of the SNR sweep")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--selfcheck", action="store_true")
     args = ap.parse_args()
@@ -186,7 +225,10 @@ def main() -> int:
             continue
         x, _ = librosa.load(str(path), sr=16000, mono=True)
         sem_msg = pipe.resolver.resolve(pipe.asr.transcribe(str(path))).output_text
-        ref_trad = r["hindi_reference"] if args.gold else asr_translate(x)
+        if args.sem_noise and not args.gold:
+            ref_trad = ""  # traditional scheme is not part of the semantic-noise sweep
+        else:
+            ref_trad = r["hindi_reference"] if args.gold else asr_translate(x)
         ref_sem = r["hindi_reference"] if args.gold else pipe.translator.translate(sem_msg)
         ref_codec = ""
         if codec:
@@ -204,54 +246,144 @@ def main() -> int:
     logger.info("Mean bits/message: traditional=%.0f semantic=%.0f codec=%.0f",
                 bits_trad, bits_sem, bits_codec)
 
-    results = []  # (snr, ber, chrf_trad, chrf_sem, chrf_coded, chrf_codec)
-    for snr in args.snr:
-        ber = bpsk_ber(snr)
-        st, ss, sr, sc = [], [], [], []
-        for c in clips:
-            hi_trad = asr_translate(add_awgn(c["x"], snr))
-            hi_sem = pipe.translator.translate(transmit_text(c["sem_msg"], snr, rng))
-            hi_coded = pipe.translator.translate(transmit_text(c["sem_msg"], snr, rng, rep3=True))
-            st.append(chrf(c["ref_trad"], hi_trad))
-            ss.append(chrf(c["ref_sem"], hi_sem))
-            sr.append(chrf(c["ref_sem"], hi_coded))
-            if codec:
-                hi_codec = pipe.translator.translate(codec.reconstruct(c["sem_msg"], snr))
-                sc.append(chrf(c["ref_codec"], hi_codec))
-        results.append((snr, ber, float(np.mean(st)), float(np.mean(ss)),
-                        float(np.mean(sr)), float(np.mean(sc)) if sc else None))
-        logger.info("SNR=%g dB  BER=%.2e  chrF trad=%.3f sem=%.3f coded=%.3f codec=%s",
-                    snr, ber, results[-1][2], results[-1][3], results[-1][4],
-                    f"{results[-1][5]:.3f}" if codec else "n/a")
-
-    out_csv = config.TESTSET_DIR / "semcom_snr.csv"
-    with out_csv.open("w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow(["SNR_dB", "BER", "chrF_traditional", "chrF_semantic",
-                    "chrF_semantic_rep3", "chrF_codec",
-                    "bits_traditional", "bits_semantic", "bits_semantic_rep3",
-                    "bits_codec", "n"])
-        for snr, ber, ct, cs, cr, cc in results:
-            w.writerow([snr, f"{ber:.3e}", f"{ct:.4f}", f"{cs:.4f}", f"{cr:.4f}",
-                        f"{cc:.4f}" if cc is not None else "",
-                        f"{bits_trad:.0f}", f"{bits_sem:.0f}", f"{3 * bits_sem:.0f}",
-                        f"{bits_codec:.0f}" if codec else "", len(clips)])
-    logger.info("Wrote %s", out_csv)
+    from noise_eval import wer
 
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    tag = ("_rayleigh" if args.channel == "rayleigh" else "") + ("_gold" if args.gold else "")
+    chan_label = "Rayleigh fading" if args.channel == "rayleigh" else "AWGN"
+
+    # fixed series style shared by every figure (identity never changes color)
+    SCHEMES = [("traditional (waveform bits)", "o-"),
+               ("semantic (text bits, uncoded)", "s-"),
+               ("semantic (text bits, rep-3 coded)", "d-"),
+               ("semantic (our learned codec)", "^-")]
+
+    def line_fig(xs, series, xlabel, ylabel, title, out_png, ylim=None, invert=False):
+        """series = list of (label, fmt, ys) with ys possibly all-None (skipped)."""
+        fig, ax = plt.subplots(figsize=(7, 4))
+        for label, fmt, ys in series:
+            if any(y is not None for y in ys):
+                ax.plot(xs, ys, fmt, label=label)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_title(title)
+        if invert:
+            ax.invert_xaxis()
+        if ylim:
+            ax.set_ylim(*ylim)
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig(out_png, dpi=130)
+        plt.close(fig)
+        logger.info("Wrote %s", out_png)
+
+    # ---- semantic-noise sweep (clean channel, sender-side corruption) ----
+    if args.sem_noise:
+        pool = sorted({w for c in clips for w in c["sem_msg"].split()})
+        results = []  # (p, chrf_sem, wer_sem, chrf_codec, wer_codec)
+        for p in args.sem_noise:
+            cs, ws, cc, wc = [], [], [], []
+            for c in clips:
+                noised = semantic_noise(c["sem_msg"], p, rng, pool)
+                hi_sem = pipe.translator.translate(noised)
+                cs.append(chrf(c["ref_sem"], hi_sem))
+                ws.append(wer(c["ref_sem"], hi_sem))
+                if codec:
+                    hi_codec = pipe.translator.translate(codec.reconstruct(noised, None))
+                    cc.append(chrf(c["ref_codec"], hi_codec))
+                    wc.append(wer(c["ref_codec"], hi_codec))
+            results.append((p, float(np.mean(cs)), float(np.mean(ws)),
+                            float(np.mean(cc)) if cc else None,
+                            float(np.mean(wc)) if wc else None))
+            r = results[-1]
+            logger.info("sem-noise p=%.2f  chrF sem=%.3f codec=%s  WER sem=%.3f codec=%s",
+                        p, r[1], f"{r[3]:.3f}" if r[3] is not None else "n/a",
+                        r[2], f"{r[4]:.3f}" if r[4] is not None else "n/a")
+
+        gtag = "_gold" if args.gold else ""
+        out_csv = config.TESTSET_DIR / f"semcom_semnoise{gtag}.csv"
+        with out_csv.open("w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["p_word_corrupt", "chrF_semantic", "WER_semantic",
+                        "chrF_codec", "WER_codec", "n"])
+            for p, cs_, ws_, cc_, wc_ in results:
+                w.writerow([p, f"{cs_:.4f}", f"{ws_:.4f}",
+                            f"{cc_:.4f}" if cc_ is not None else "",
+                            f"{wc_:.4f}" if wc_ is not None else "", len(clips)])
+        logger.info("Wrote %s", out_csv)
+
+        xs = [r[0] for r in results]
+        line_fig(xs, [("semantic (text)", "s-", [r[1] for r in results]),
+                      ("semantic (our learned codec)", "^-", [r[3] for r in results])],
+                 "word corruption probability p", "meaning preservation (chrF)",
+                 f"Semantic noise at the sender, clean channel (n={len(clips)})",
+                 config.TESTSET_DIR / f"semcom_semnoise{gtag}.png", ylim=(0, 1.05))
+        line_fig(xs, [("semantic (text)", "s-", [r[2] for r in results]),
+                      ("semantic (our learned codec)", "^-", [r[4] for r in results])],
+                 "word corruption probability p", "WER of received Hindi",
+                 f"Semantic noise at the sender, clean channel (n={len(clips)})",
+                 config.TESTSET_DIR / f"semcom_semnoise{gtag}_wer.png")
+        print(f"\nDone. Plots: semcom_semnoise{gtag}.png / _wer.png")
+        return 0
+
+    # ---- SNR sweep over the selected channel ----
+    ber_fn = bpsk_ber if args.channel == "awgn" else rayleigh_ber
+    results = []  # (snr, ber, [4 chrF], [4 WER])
+    for snr in args.snr:
+        ber = ber_fn(snr)
+        cf = [[], [], [], []]
+        we = [[], [], [], []]
+        for c in clips:
+            # one fade per message, shared by all schemes (paired comparison)
+            eff = snr if args.channel == "awgn" else fading_snr_db(snr, rng)
+            hyps = [asr_translate(add_awgn(c["x"], eff)),
+                    pipe.translator.translate(transmit_text(c["sem_msg"], eff, rng)),
+                    pipe.translator.translate(transmit_text(c["sem_msg"], eff, rng, rep3=True)),
+                    pipe.translator.translate(codec.reconstruct(c["sem_msg"], eff)) if codec else None]
+            refs = [c["ref_trad"], c["ref_sem"], c["ref_sem"], c["ref_codec"]]
+            for i, (ref, hyp) in enumerate(zip(refs, hyps)):
+                if hyp is not None:
+                    cf[i].append(chrf(ref, hyp))
+                    we[i].append(wer(ref, hyp))
+        mc = [float(np.mean(s)) if s else None for s in cf]
+        mw = [float(np.mean(s)) if s else None for s in we]
+        results.append((snr, ber, mc, mw))
+        logger.info("SNR=%g dB (%s)  BER=%.2e  chrF trad=%.3f sem=%.3f coded=%.3f codec=%s",
+                    snr, chan_label, ber, mc[0], mc[1], mc[2],
+                    f"{mc[3]:.3f}" if codec else "n/a")
+
+    out_csv = config.TESTSET_DIR / f"semcom_snr{tag}.csv"
+    with out_csv.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["SNR_dB", "BER", "chrF_traditional", "chrF_semantic",
+                    "chrF_semantic_rep3", "chrF_codec",
+                    "WER_traditional", "WER_semantic", "WER_semantic_rep3", "WER_codec",
+                    "bits_traditional", "bits_semantic", "bits_semantic_rep3",
+                    "bits_codec", "n"])
+        for snr, ber, mc, mw in results:
+            w.writerow([snr, f"{ber:.3e}",
+                        *[f"{v:.4f}" if v is not None else "" for v in mc],
+                        *[f"{v:.4f}" if v is not None else "" for v in mw],
+                        f"{bits_trad:.0f}", f"{bits_sem:.0f}", f"{3 * bits_sem:.0f}",
+                        f"{bits_codec:.0f}" if codec else "", len(clips)])
+    logger.info("Wrote %s", out_csv)
+
     pts = sorted(results)
+    xs = [p[0] for p in pts]
+
+    # chrF figure keeps the bits-per-message bar panel (the headline figure)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4), gridspec_kw={"width_ratios": [2, 1]})
-    ax1.plot([p[0] for p in pts], [p[2] for p in pts], "o-", label="traditional (waveform bits)")
-    ax1.plot([p[0] for p in pts], [p[3] for p in pts], "s-", label="semantic (text bits, uncoded)")
-    ax1.plot([p[0] for p in pts], [p[4] for p in pts], "d-", label="semantic (text bits, rep-3 coded)")
-    if codec:
-        ax1.plot([p[0] for p in pts], [p[5] for p in pts], "^-", label="semantic (our learned codec)")
+    for i, (label, fmt) in enumerate(SCHEMES):
+        ys = [p[2][i] for p in pts]
+        if any(y is not None for y in ys):
+            ax1.plot(xs, ys, fmt, label=label)
     ax1.set_xlabel("channel SNR (dB)")
     ax1.set_ylabel("meaning preservation (chrF)")
-    ax1.set_title(f"Semantic vs traditional transmission (n={len(clips)})")
+    ax1.set_title(f"Semantic vs traditional transmission, {chan_label} (n={len(clips)})")
     ax1.invert_xaxis()
     ax1.set_ylim(0, 1.05)
     ax1.grid(True, alpha=0.3)
@@ -266,10 +398,17 @@ def main() -> int:
     ax2.set_title(f"{bits_trad / bits_sem:.0f}x fewer bits")
     ax2.grid(True, axis="y", alpha=0.3)
     fig.tight_layout()
-    out_png = config.TESTSET_DIR / "semcom_snr.png"
+    out_png = config.TESTSET_DIR / f"semcom_snr{tag}.png"
     fig.savefig(out_png, dpi=130)
+    plt.close(fig)
     logger.info("Wrote %s", out_png)
-    print(f"\nDone. Plot: {out_png}")
+
+    line_fig(xs, [(label, fmt, [p[3][i] for p in pts])
+                  for i, (label, fmt) in enumerate(SCHEMES)],
+             "channel SNR (dB)", "WER of received Hindi (lower = better)",
+             f"WER vs SNR, {chan_label} (n={len(clips)})",
+             config.TESTSET_DIR / f"semcom_wer{tag}.png", invert=True)
+    print(f"\nDone. Plots: {out_png} + semcom_wer{tag}.png")
     return 0
 
 

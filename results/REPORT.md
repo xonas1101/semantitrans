@@ -130,11 +130,11 @@ Meaning preservation (chrF vs each scheme's clean-channel output, n=25):
 
 | SNR (dB) | traditional | text uncoded | text rep-3 coded | our codec |
 |---|---|---|---|---|
-| 10 | 0.53 | **1.00** | **1.00** | 0.58 |
-| 5 | 0.33 | 0.65 | **0.98** | 0.41 |
-| 2 | 0.28 | 0.12 | **0.69** | 0.29 |
+| 10 | 0.53 | **1.00** | **1.00** | 0.63 |
+| 5 | 0.33 | 0.65 | **0.98** | 0.35 |
+| 2 | 0.28 | 0.12 | **0.69** | 0.25 |
 | 0 | 0.20 | 0.04 | **0.37** | 0.17 |
-| -2 | 0.17 | 0.02 | 0.16 | 0.15 |
+| -2 | 0.17 | 0.02 | **0.16** | 0.12 |
 | -5 | 0.14 | 0.01 | 0.03 | **0.09** |
 
 - Good channel (10 dB): text bits deliver the meaning **perfectly** at 1/2418
@@ -144,12 +144,54 @@ Meaning preservation (chrF vs each scheme's clean-channel output, n=25):
   left but still collapses (0.03 at -5 dB); coding delays the cliff, it does
   not remove it.
 - **Our codec has no cliff**: trained with the channel in the loop, it degrades
-  gracefully, ties the coded text at -2 dB, is the only semantic scheme still
-  working at -5 dB (3× the coded text), and roughly matches the full 1.7-Mbit
-  waveform at a small fraction of the bits. Graceful degradation is the
+  gracefully, is the only semantic scheme still working at -5 dB (3× the
+  coded text), and roughly matches the full 1.7-Mbit waveform at a small
+  fraction of the bits. Graceful degradation is the
   signature result of learned semantic communication.
 
 (Full numbers: `KEY_RESULTS.md` and the CSVs in this folder.)
+
+### 5.4 Rayleigh fading (the realistic wireless channel)
+
+(plots: `semcom_snr_rayleigh.png`, `semcom_snr_rayleigh_gold.png`)
+
+Same experiment over quasi-static flat Rayleigh fading with perfect CSI (one
+fade drawn per message, shared by all schemes):
+
+| SNR (dB) | traditional | text uncoded | text rep-3 coded | our codec |
+|---|---|---|---|---|
+| 10 | 0.39 | 0.78 | **0.87** | 0.59 |
+| 5 | 0.36 | 0.60 | **0.81** | 0.38 |
+| 2 | 0.28 | 0.28 | **0.55** | 0.27 |
+| 0 | 0.18 | 0.08 | **0.30** | 0.18 |
+| -2 | 0.14 | 0.05 | **0.17** | 0.14 |
+| -5 | 0.11 | 0.02 | 0.08 | **0.12** |
+
+Deep fades break digital text long before AWGN does (uncoded text is no longer
+perfect even at 10 dB), and the codec's advantage *grows*: at -5 dB it beats
+every scheme including the full 1.7-Mbit waveform. Random-SNR training is in
+effect training on a fading channel, so this is expected — and matches
+DeepSC's Rayleigh findings.
+
+### 5.5 WER of the received Hindi
+
+(plots: `semcom_wer.png`, `semcom_wer_rayleigh.png`, `_gold` variants)
+
+All sweeps also report word error rate vs the same references. WER exceeds
+1.0 when corrupted text decodes to garbage longer than the reference —
+uncoded text hits WER **7.3** at -2 dB AWGN while the codec stays at 0.91.
+The digital cliff is even more dramatic in WER than in chrF.
+
+### 5.6 Semantic noise (meaning corruption at the sender)
+
+(plot: `semcom_semnoise.png` · data: `semcom_semnoise.csv`)
+
+Each sender-side word is replaced with probability p on a *clean* channel,
+isolating semantic noise from channel noise. chrF at p = 0/0.1/0.3: plain
+text 1.00/0.76/0.43; codec 1.00/0.56/0.26. **Honest negative result:** the
+codec amplifies semantic noise (corrupted words are out-of-distribution
+inputs) — it defends against channel noise only. Meaning corruption must be
+fixed at the source; nothing downstream can undo it.
 
 ---
 
@@ -181,7 +223,8 @@ purpose-built gold-annotated Hindi idiom test set.
 
 - The Whisper fine-tune is demonstrative; the LoRA adapter is thin (299 idiom
   pairs). The substantive trained models are the **detector** and the **codec**.
-- The channel is AWGN only; Rayleigh fading is the natural next step.
+- The fading model is quasi-static flat Rayleigh with perfect CSI; no
+  Doppler or frequency selectivity.
 - chrF under-credits the codec's paraphrases; an embedding-based semantic
   metric (LaBSE cosine / COMET) would score meaning directly.
 - The codec still paraphrases (~28% reconstruction WER on a clean channel);
@@ -190,8 +233,9 @@ purpose-built gold-annotated Hindi idiom test set.
 - Gloss KB coverage is a seed set; scaling it (or borrowing IdiomKB with
   license attribution) widens idiom coverage.
 - Research-grade systems (DeepSC) use BLEU/sentence-similarity on 100k+
-  sentence corpora and fading channels; our study is deliberately small-scale
-  (250 gold sentences, 25-clip channel sweeps) but methodologically parallel.
+  sentence corpora; our study is deliberately small-scale (250 gold
+  sentences, 25-clip channel sweeps) but methodologically parallel — including
+  AWGN + Rayleigh channels and a semantic-noise ablation.
 
 ## 8. References
 

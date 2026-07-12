@@ -4,10 +4,11 @@ A thin Gradio front-end over the existing Pipeline. Upload or record English
 audio, pick the idiom mode, and see every stage: transcript, literalized
 English, detected idioms, and the Hindi output.
 
-A second tab simulates semantic communication over a noisy wireless channel:
-pick an SNR and see the same utterance arrive three ways — raw waveform,
-meaning-as-text-bits (BPSK), and through our learned semantic codec — with
-the bit cost of each.
+A second tab simulates semantic communication over a noisy wireless channel
+(AWGN or Rayleigh fading): pick an SNR and see the same utterance arrive four
+ways — raw waveform, meaning-as-text-bits (BPSK, uncoded and rep-3 coded), and
+through our learned semantic codec — with the bit cost of each. A semantic-noise
+slider corrupts the sender-side meaning independently of the channel.
 
 Usage:
   python app.py                 # http://127.0.0.1:7860
@@ -34,7 +35,7 @@ def build_ui(pipe: Pipeline):
 
         codec = SemCodec.load(codec_dir)
 
-    def run_channel(audio_path, snr_db):
+    def run_channel(audio_path, snr_db, channel, sem_p):
         import numpy as np
         import librosa
         import soundfile as sf
@@ -42,39 +43,50 @@ def build_ui(pipe: Pipeline):
         from pathlib import Path
 
         from noise_eval import add_awgn
-        from semcom_eval import bpsk_ber, transmit_text
+        from semcom_eval import (bpsk_ber, fading_snr_db, rayleigh_ber,
+                                 semantic_noise, transmit_text)
 
         if not audio_path:
-            return "(no audio given)", "", "", "", "", ""
+            return "(no audio given)", "", "", "", "", "", ""
         res = pipe.run(audio_path)
-        sem_msg = res.intermediate
+        rng = np.random.default_rng()
+        # semantic noise corrupts the sender-side meaning (all semantic schemes)
+        sem_msg = semantic_noise(res.intermediate, sem_p, rng)
+        # one fade for the whole message, shared by all schemes
+        eff = snr_db if channel == "AWGN" else fading_snr_db(snr_db, rng)
 
-        # scheme 1: traditional — waveform through AWGN, ASR + translate at receiver
+        # scheme 1: traditional — waveform through the channel, ASR + translate
         x, _ = librosa.load(audio_path, sr=16000, mono=True)
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
-            sf.write(tf.name, add_awgn(x, snr_db), 16000)
+            sf.write(tf.name, add_awgn(x, eff), 16000)
             tmp = tf.name
         try:
             hi_trad = pipe.translator.translate(pipe.asr.transcribe(tmp))
         finally:
             Path(tmp).unlink(missing_ok=True)
 
-        # scheme 2: semantic — meaning as UTF-8 bits over BPSK
-        rng = np.random.default_rng()
-        recv_text = transmit_text(sem_msg, snr_db, rng)
+        # scheme 2: semantic — meaning as UTF-8 bits over BPSK (uncoded)
+        recv_text = transmit_text(sem_msg, eff, rng)
         hi_text = pipe.translator.translate(recv_text)
 
-        # scheme 3: our learned semantic codec
+        # scheme 3: same text, rep-3 coded (majority vote)
+        recv_coded = transmit_text(sem_msg, eff, rng, rep3=True)
+        hi_coded = pipe.translator.translate(recv_coded)
+
+        # scheme 4: our learned semantic codec
         recv_codec, hi_codec = "(codec not trained — run train_semcodec.py)", ""
         bits_codec = ""
         if codec:
-            recv_codec = codec.reconstruct(sem_msg, snr_db)
+            recv_codec = codec.reconstruct(sem_msg, eff)
             hi_codec = pipe.translator.translate(recv_codec)
             bits_codec = f" · codec {codec.bits_per_message(sem_msg):,} bits"
+        ber_fn = bpsk_ber if channel == "AWGN" else rayleigh_ber
+        n_text = len(sem_msg.encode("utf-8")) * 8
         bits = (f"**Bits/message:** waveform {len(x) * 16:,} · "
-                f"text {len(sem_msg.encode('utf-8')) * 8:,}{bits_codec} · "
-                f"BER at {snr_db:g} dB = {bpsk_ber(snr_db):.2e}")
-        return sem_msg, hi_trad, recv_text, hi_text, f"{recv_codec}\n→ {hi_codec}", bits
+                f"text {n_text:,} · rep-3 {3 * n_text:,}{bits_codec} · "
+                f"{channel} BER at {snr_db:g} dB = {ber_fn(snr_db):.2e}")
+        return (sem_msg, hi_trad, recv_text, hi_text,
+                f"{recv_coded}\n→ {hi_coded}", f"{recv_codec}\n→ {hi_codec}", bits)
 
     def run_audio(audio_path, mode):
         if not audio_path:
@@ -112,15 +124,22 @@ def build_ui(pipe: Pipeline):
 
         with gr.Tab("Noisy channel"):
             gr.Markdown(
-                "Semantic communication demo: the same utterance is sent over an "
-                "AWGN channel three ways — the raw **waveform**, the extracted "
-                "**meaning as text bits** (BPSK), and through **our learned "
-                "semantic codec**. Lower the SNR and watch which one survives."
+                "Semantic communication demo: the same utterance is sent over a "
+                "noisy channel four ways — the raw **waveform**, the extracted "
+                "**meaning as text bits** (BPSK, uncoded and rep-3 coded), and "
+                "through **our learned semantic codec**. Lower the SNR, switch to "
+                "Rayleigh fading, or add semantic noise and watch which survives."
             )
             with gr.Row():
                 with gr.Column():
                     ch_audio = gr.Audio(type="filepath", sources=["upload", "microphone"], label="English audio")
                     snr = gr.Slider(-6, 15, value=5, step=1, label="Channel SNR (dB)")
+                    channel = gr.Radio(["AWGN", "Rayleigh fading"], value="AWGN",
+                                       label="Channel model",
+                                       info="Rayleigh = flat fading, perfect CSI")
+                    sem_p = gr.Slider(0, 0.5, value=0, step=0.05,
+                                      label="Semantic noise (word corruption prob)",
+                                      info="corrupts the sender-side meaning before transmission")
                     ch_btn = gr.Button("Transmit", variant="primary")
                     bits_md = gr.Markdown()
                 with gr.Column():
@@ -128,9 +147,10 @@ def build_ui(pipe: Pipeline):
                     hi_trad = gr.Textbox(label="1) Traditional — waveform through channel → Hindi", lines=2)
                     recv_text = gr.Textbox(label="2) Semantic text bits — received (corrupted) English", lines=2)
                     hi_text = gr.Textbox(label="2) → Hindi", lines=2)
-                    codec_out = gr.Textbox(label="3) Our learned codec — received English → Hindi", lines=3)
-            ch_btn.click(run_channel, [ch_audio, snr],
-                         [sem_msg, hi_trad, recv_text, hi_text, codec_out, bits_md])
+                    coded_out = gr.Textbox(label="3) Rep-3 coded text — received English → Hindi", lines=3)
+                    codec_out = gr.Textbox(label="4) Our learned codec — received English → Hindi", lines=3)
+            ch_btn.click(run_channel, [ch_audio, snr, channel, sem_p],
+                         [sem_msg, hi_trad, recv_text, hi_text, coded_out, codec_out, bits_md])
 
     return demo
 

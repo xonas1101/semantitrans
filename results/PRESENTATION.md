@@ -38,7 +38,8 @@ past 100% at -5 dB SNR. The signal is fragile; the meaning doesn't have to be.
 
 ## 4. The experiment (2 min) [show `semcom_snr.png`]
 
-Same utterance, same AWGN channel, three transmission schemes:
+Same utterance, same channel (AWGN or Rayleigh fading), four transmission
+schemes:
 
 | Scheme | What crosses the channel | Bits/msg |
 |---|---|---|
@@ -56,13 +57,22 @@ Results:
   of the bandwidth.
 - Bad channel (≤ 2 dB): text bits fall off the "digital cliff" (bit errors
   shred UTF-8: chrF 0.04 at 0 dB). A repetition code delays the cliff a few
-  dB but still collapses. The **codec degrades gracefully** — it ties coded
-  text at -2 dB, is the only semantic scheme alive at -5 dB, and roughly
+  dB but still collapses. The **codec degrades gracefully** — it is the
+  only semantic scheme alive at -5 dB, and roughly
   matches the full waveform while sending 733× fewer bits. Graceful
   degradation is the signature result of learned semantic communication.
+- Rayleigh fading [`semcom_snr_rayleigh.png`]: deep fades break digital text
+  even at 10 dB (0.78, not 1.0); the codec's edge grows — at -5 dB it beats
+  **everything**, including the full waveform.
+- WER view [`semcom_wer.png`]: below the cliff, uncoded text decodes to
+  garbage *longer than the sentence* — WER 7.3 at -2 dB vs codec 0.91.
+- Semantic noise [`semcom_semnoise.png`]: corrupt words at the *sender* and
+  the codec does worse than plain text — it fights channel noise, not meaning
+  corruption. Honest ablation; meaning errors must be fixed at the source.
 
 Live demo, "Noisy channel" tab: transmit at **10 dB** (text wins perfectly),
-drag to **-2 dB**, transmit again (text garbles, codec survives). Two clicks =
+drag to **-2 dB**, transmit again (text garbles, codec survives). Then flip
+AWGN → Rayleigh at 10 dB and watch text lose its perfect score. Two clicks =
 the whole argument.
 
 ## 5. What is ours vs cited (30 s)
@@ -81,7 +91,8 @@ the whole argument.
   absolute accuracy vs gold Hindi references: `semcom_snr_gold.png`.
 - Codec symbols are 8-bit quantized (realistic digital transmission);
   quantization cost no measurable quality vs float32.
-- Channel is AWGN; fading channels (Rayleigh) are the next step.
+- Channels: AWGN + quasi-static flat Rayleigh (perfect CSI); no Doppler or
+  frequency selectivity.
 
 ## Demo checklist
 

@@ -15,6 +15,9 @@ published work (DeepSC, IdiomKB, Baziotis 2023, Zaitova 2025, ...).
 | ASR robustness (WER vs SNR) | `wer_snr.png` | `wer_snr.csv` | `wer_snr_summary.txt` |
 | Semantic communication (robustness) | `semcom_snr.png` | `semcom_snr.csv` | `semcom_summary.txt` |
 | Semantic communication (vs gold refs) | `semcom_snr_gold.png` | `semcom_snr_gold.csv` | `KEY_RESULTS.md` §6 |
+| Semcom over Rayleigh fading | `semcom_snr_rayleigh.png` (+`_gold`) | matching `.csv` | `KEY_RESULTS.md` §7 |
+| Semcom WER vs SNR (all channels) | `semcom_wer*.png` | in `semcom_snr*.csv` | `KEY_RESULTS.md` §8 |
+| Semantic noise at the sender | `semcom_semnoise.png` (+`_wer`) | `semcom_semnoise.csv` | `KEY_RESULTS.md` §9 |
 | Idiom-aware vs baseline + LTE (gold) | — | manifest.csv | `KEY_RESULTS.md` §1–2 |
 
 ## Pipeline
