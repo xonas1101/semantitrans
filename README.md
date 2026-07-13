@@ -146,20 +146,25 @@ optional COMET.
 
 Semantic communication transmits the **meaning** of a message in the fewest
 bits, instead of reproducing the signal bit-for-bit. `semcom_eval.py` simulates
-an AWGN wireless channel and compares three ways to send an utterance:
-the raw **waveform** (~1.7 Mbit/msg), the idiom-resolved **meaning as text
-bits** over BPSK (~700 bits — 2418× fewer), and **our from-scratch semantic
-channel codec** (transformer encoder → channel symbols → AWGN → transformer
-decoder, trained across random SNRs; ~9 kbit). Result: text bits deliver the
-meaning perfectly on a good channel; below ~3 dB they collapse, while the
-learned codec degrades gracefully and matches the full waveform at 0 dB with
-183× fewer bits.
+a BPSK channel (AWGN or Rayleigh fading) and compares four ways to send an
+utterance: the waveform as classical **digital PCM bits** (~1.7 Mbit/msg), the
+idiom-resolved **meaning as text bits** (~700 bits — 2418× fewer), the same
+text **rep-3 coded** (~2.1 kbit — 806× fewer), and **our from-scratch semantic
+channel codec** (transformer encoder → 8-bit-quantized channel symbols →
+noise → transformer decoder, trained across random SNRs; ~2.3 kbit — 733×
+fewer). Result — the literature-standard crossover: classical is near-perfect
+at 10 dB and text bits match it at 1/2418 the bandwidth; below that classical
+cliffs first, rep-3 coded text dominates the mid-range (and every Rayleigh
+SNR), and the learned codec is the only scheme alive at -5 dB.
 
 ```bash
 python noise_eval.py                    # WER vs SNR (motivation)
 python train_semcodec.py                # train the codec (CPU-friendly; --resume)
-python semcom_eval.py                   # 3-scheme comparison → data/testset/semcom_snr.*
+python semcom_eval.py                   # 4-scheme comparison → data/testset/semcom_snr.*
+python semcom_eval.py --channel rayleigh  # flat Rayleigh fading (perfect CSI)
 python semcom_eval.py --gold            # score against gold hindi_reference
+python semcom_eval.py --gold --literal-only  # non-idiomatic sentences only
+python semcom_eval.py --sem-noise 0 0.1 0.3  # sender-side semantic noise
 python app.py                           # web UI incl. live "Noisy channel" tab
 ```
 

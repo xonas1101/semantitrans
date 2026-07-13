@@ -114,7 +114,7 @@ gate causes **zero over-correction**.
 
 | scheme | what crosses the channel | bits/message | vs waveform |
 |---|---|---|---|
-| traditional | 16 kHz × 16-bit waveform | 1,692,058 | 1× |
+| traditional | 16 kHz × 16-bit waveform as digital PCM bits | 1,692,058 | 1× |
 | semantic (text) | idiom-resolved English, UTF-8 | 700 | **2,418× fewer** |
 | semantic (text, rep-3 coded) | same + rate-1/3 repetition code | 2,100 | 806× fewer |
 | semantic (our codec) | learned symbols, 8-bit quantized | 2,309 | **733× fewer** |
@@ -126,28 +126,40 @@ needed. Intelligence at the endpoints replaces bandwidth in the channel.
 
 (plots: `semcom_snr.png` robustness, `semcom_snr_gold.png` absolute)
 
-Meaning preservation (chrF vs each scheme's clean-channel output, n=25):
+The traditional scheme is classical *digital* transmission — the PCM bits
+cross the same BPSK channel as the text schemes, the literature-standard
+baseline. Meaning preservation (chrF vs each scheme's clean-channel output,
+n=25):
 
 | SNR (dB) | traditional | text uncoded | text rep-3 coded | our codec |
 |---|---|---|---|---|
-| 10 | 0.53 | **1.00** | **1.00** | 0.63 |
-| 5 | 0.33 | 0.65 | **0.98** | 0.35 |
-| 2 | 0.28 | 0.12 | **0.69** | 0.25 |
-| 0 | 0.20 | 0.04 | **0.37** | 0.17 |
-| -2 | 0.17 | 0.02 | **0.16** | 0.12 |
-| -5 | 0.14 | 0.01 | 0.03 | **0.09** |
+| 10 | 0.95 | **1.00** | **1.00** | 0.57 |
+| 5 | 0.18 | 0.61 | **1.00** | 0.38 |
+| 2 | 0.13 | 0.14 | **0.74** | 0.28 |
+| 0 | 0.05 | 0.03 | **0.31** | 0.16 |
+| -2 | 0.01 | 0.02 | **0.15** | 0.12 |
+| -5 | 0.01 | 0.01 | 0.02 | **0.10** |
 
-- Good channel (10 dB): text bits deliver the meaning **perfectly** at 1/2418
-  of the bandwidth.
-- Below ~3 dB: uncoded text falls off the digital cliff (chrF 0.04 at 0 dB —
-  bit errors shred UTF-8). The rep-3 repetition code pushes the cliff ~3-4 dB
-  left but still collapses (0.03 at -5 dB); coding delays the cliff, it does
-  not remove it.
-- **Our codec has no cliff**: trained with the channel in the loop, it degrades
-  gracefully, is the only semantic scheme still working at -5 dB (3× the
-  coded text), and roughly matches the full 1.7-Mbit waveform at a small
-  fraction of the bits. Graceful degradation is the
-  signature result of learned semantic communication.
+- This reproduces the published classical-vs-semantic crossover
+  (`literature_comparison.png`): classical near-perfect on a good channel,
+  semantic schemes owning everything below.
+- Good channel (10 dB): classical is near-perfect (0.95) and text bits match
+  it (1.00) at 1/2418 of the bandwidth — ~2,500× more meaning per kilobit at
+  equal quality (`semcom_efficiency.png`).
+- Classical cliffs first below 10 dB: its 1.7-Mbit message collects ~10,000
+  bit errors at 5 dB where the 700-bit text message collects ~4. Uncoded text
+  cliffs below ~3 dB.
+- **Rep-3 coded text dominates the mid-range** (perfect to 5 dB, best scheme
+  at 5/2/0/-2 dB) — the practical sweet spot at 806× compression. Coding
+  delays the cliff, it does not remove it (0.02 at -5 dB).
+- **Our codec has no cliff**: trained with the channel in the loop, it
+  degrades gracefully and is the only scheme still working at -5 dB (0.10).
+  Graceful degradation is the signature result of learned semantic
+  communication.
+- On non-idiomatic (literal-only) sentences with gold references
+  (`semcom_snr_gold_literal.csv`), traditional ties text at 10 dB (0.42 vs
+  0.43) — the traditional scheme's deficit on the full test set is idiom
+  mistranslation, not channel noise.
 
 (Full numbers: `KEY_RESULTS.md` and the CSVs in this folder.)
 
@@ -160,18 +172,19 @@ fade drawn per message, shared by all schemes):
 
 | SNR (dB) | traditional | text uncoded | text rep-3 coded | our codec |
 |---|---|---|---|---|
-| 10 | 0.39 | 0.78 | **0.87** | 0.59 |
-| 5 | 0.36 | 0.60 | **0.81** | 0.38 |
-| 2 | 0.28 | 0.28 | **0.55** | 0.27 |
-| 0 | 0.18 | 0.08 | **0.30** | 0.18 |
-| -2 | 0.14 | 0.05 | **0.17** | 0.14 |
-| -5 | 0.11 | 0.02 | 0.08 | **0.12** |
+| 10 | 0.69 | 0.80 | **0.92** | 0.53 |
+| 5 | 0.28 | 0.51 | **0.69** | 0.33 |
+| 2 | 0.09 | 0.23 | **0.43** | 0.20 |
+| 0 | 0.06 | 0.09 | **0.27** | 0.14 |
+| -2 | 0.04 | 0.08 | **0.20** | 0.10 |
+| -5 | 0.02 | 0.02 | **0.15** | 0.11 |
 
-Deep fades break digital text long before AWGN does (uncoded text is no longer
-perfect even at 10 dB), and the codec's advantage *grows*: at -5 dB it beats
-every scheme including the full 1.7-Mbit waveform. Random-SNR training is in
-effect training on a fading channel, so this is expected — and matches
-DeepSC's Rayleigh findings.
+Deep fades hurt every digital scheme even at 10 dB average SNR. **Rep-3 coded
+text wins at every single SNR under fading** — redundancy is exactly what
+survives a fade — making it the practical scheme for realistic channels. The
+codec degrades most gracefully at the bottom (0.11 at -5 dB, ~6× the
+waveform's 0.02); random-SNR training is in effect training on a fading
+channel, matching DeepSC's Rayleigh findings.
 
 ### 5.5 WER of the received Hindi
 
@@ -179,8 +192,10 @@ DeepSC's Rayleigh findings.
 
 All sweeps also report word error rate vs the same references. WER exceeds
 1.0 when corrupted text decodes to garbage longer than the reference —
-uncoded text hits WER **7.3** at -2 dB AWGN while the codec stays at 0.91.
-The digital cliff is even more dramatic in WER than in chrF.
+uncoded text hits WER **2.6** at 0 dB AWGN while the codec stays at 0.92;
+rep-3 reaches 6.0 at -5 dB once its own cliff arrives. Because unbounded
+insertions make WER>1 a hallucination-length artifact, chrF (bounded) is the
+primary metric and the WER plots are supporting material.
 
 ### 5.6 Semantic noise (meaning corruption at the sender)
 

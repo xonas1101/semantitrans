@@ -158,7 +158,6 @@ def main() -> int:
     ax.set_xlabel("SNR (dB)")
     ax.set_ylabel("WER")
     ax.set_title(f"ASR robustness: WER vs SNR (n={len(clips)})")
-    ax.invert_xaxis()  # noisier (low SNR) on the right
     ax.grid(True, alpha=0.3)
     ax.legend()
     fig.tight_layout()

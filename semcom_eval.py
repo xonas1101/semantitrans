@@ -2,8 +2,11 @@
 
 Compares two transmission schemes at a range of channel SNRs:
 
-  TRADITIONAL  transmit the raw speech waveform (16 kHz x 16-bit PCM) through
-               an AWGN channel; the receiver runs ASR + translation.
+  TRADITIONAL  transmit the speech as digital 16-bit PCM bits over the same
+               BPSK channel (classical digital transmission, as in the DeepSC
+               literature); the receiver decodes the bits and runs ASR +
+               translation. Error-free at high SNR (classical is GOOD on a
+               good channel); collapses below the digital cliff.
                Bits/message = n_samples * 16 (~256 kbit per second of speech).
 
   SEMANTIC     the SENDER runs ASR + idiom resolution and transmits only the
@@ -49,7 +52,6 @@ import tempfile
 from pathlib import Path
 
 import config
-from noise_eval import add_awgn
 
 logger = logging.getLogger("semcom_eval")
 
@@ -97,6 +99,18 @@ def transmit_bits(data: bytes, ber: float, rng) -> bytes:
     bits = np.unpackbits(np.frombuffer(data, dtype=np.uint8))
     flips = rng.random(bits.size) < ber
     return np.packbits(bits ^ flips).tobytes()
+
+
+def transmit_waveform(x, snr_db: float, rng):
+    """Classical digital transmission: 16-bit PCM bits over BPSK, uncoded.
+    Same modulation and bit accounting as the text scheme — only the payload
+    differs. Bit-perfect at high SNR; impulsive garbage below the cliff.
+    """
+    import numpy as np
+
+    pcm = (np.clip(x, -1.0, 1.0) * 32767).astype("<i2").tobytes()
+    rx = transmit_bits(pcm, bpsk_ber(snr_db), rng)
+    return np.frombuffer(rx, dtype="<i2").astype(np.float32) / 32767.0
 
 
 def transmit_text(text: str, snr_db: float, rng, rep3: bool = False) -> str:
@@ -154,6 +168,9 @@ def _selfcheck() -> int:
     assert rayleigh_ber(-5) < 0.5
     fades = [fading_snr_db(0, rng) for _ in range(20000)]
     assert abs(sum(10 ** (f / 10) for f in fades) / len(fades) - 1.0) < 0.05  # E|h|^2 = 1
+    x = np.sin(np.linspace(0, 100, 16000)).astype(np.float32) * 0.5
+    assert np.allclose(transmit_waveform(x, 30, rng), x, atol=1e-4)  # clean at high SNR
+    assert not np.allclose(transmit_waveform(x, -5, rng), x, atol=0.1)  # shredded below cliff
     assert semantic_noise("a b c", 0.0, rng) == "a b c"
     assert semantic_noise("a b c d e f g h", 1.0, rng, pool=["x"]) == "x x x x x x x x"
     print("semcom_eval selfcheck OK")
@@ -170,6 +187,9 @@ def main() -> int:
                     help="score against manifest hindi_reference instead of clean-channel output")
     ap.add_argument("--channel", choices=["awgn", "rayleigh"], default="awgn",
                     help="rayleigh = quasi-static flat fading with perfect CSI")
+    ap.add_argument("--literal-only", action="store_true",
+                    help="only usage=literal manifest rows (no idioms — fair ground "
+                         "for the traditional scheme; use with --gold)")
     ap.add_argument("--sem-noise", type=float, nargs="+", metavar="P",
                     help="sweep sender-side semantic noise (word-corruption probs) "
                          "on a clean channel instead of the SNR sweep")
@@ -189,6 +209,8 @@ def main() -> int:
 
     rows = list(csv.DictReader(config.MANIFEST_PATH.open(encoding="utf-8")))
     rows = [r for r in rows if r.get("audio_path") and r.get("english_source", "").strip()]
+    if args.literal_only:
+        rows = [r for r in rows if r.get("usage", "").strip() == "literal"]
     if args.gold:
         rows = [r for r in rows if r.get("hindi_reference", "").strip()]
         if not rows:
@@ -252,7 +274,9 @@ def main() -> int:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    tag = ("_rayleigh" if args.channel == "rayleigh" else "") + ("_gold" if args.gold else "")
+    tag = (("_rayleigh" if args.channel == "rayleigh" else "")
+           + ("_gold" if args.gold else "")
+           + ("_literal" if args.literal_only else ""))
     chan_label = "Rayleigh fading" if args.channel == "rayleigh" else "AWGN"
 
     # fixed series style shared by every figure (identity never changes color)
@@ -261,7 +285,7 @@ def main() -> int:
                ("semantic (text bits, rep-3 coded)", "d-"),
                ("semantic (our learned codec)", "^-")]
 
-    def line_fig(xs, series, xlabel, ylabel, title, out_png, ylim=None, invert=False):
+    def line_fig(xs, series, xlabel, ylabel, title, out_png, ylim=None):
         """series = list of (label, fmt, ys) with ys possibly all-None (skipped)."""
         fig, ax = plt.subplots(figsize=(7, 4))
         for label, fmt, ys in series:
@@ -270,8 +294,6 @@ def main() -> int:
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
         ax.set_title(title)
-        if invert:
-            ax.invert_xaxis()
         if ylim:
             ax.set_ylim(*ylim)
         ax.grid(True, alpha=0.3)
@@ -340,7 +362,7 @@ def main() -> int:
         for c in clips:
             # one fade per message, shared by all schemes (paired comparison)
             eff = snr if args.channel == "awgn" else fading_snr_db(snr, rng)
-            hyps = [asr_translate(add_awgn(c["x"], eff)),
+            hyps = [asr_translate(transmit_waveform(c["x"], eff, rng)),
                     pipe.translator.translate(transmit_text(c["sem_msg"], eff, rng)),
                     pipe.translator.translate(transmit_text(c["sem_msg"], eff, rng, rep3=True)),
                     pipe.translator.translate(codec.reconstruct(c["sem_msg"], eff)) if codec else None]
@@ -384,7 +406,6 @@ def main() -> int:
     ax1.set_xlabel("channel SNR (dB)")
     ax1.set_ylabel("meaning preservation (chrF)")
     ax1.set_title(f"Semantic vs traditional transmission, {chan_label} (n={len(clips)})")
-    ax1.invert_xaxis()
     ax1.set_ylim(0, 1.05)
     ax1.grid(True, alpha=0.3)
     ax1.legend()
@@ -407,7 +428,7 @@ def main() -> int:
                   for i, (label, fmt) in enumerate(SCHEMES)],
              "channel SNR (dB)", "WER of received Hindi (lower = better)",
              f"WER vs SNR, {chan_label} (n={len(clips)})",
-             config.TESTSET_DIR / f"semcom_wer{tag}.png", invert=True)
+             config.TESTSET_DIR / f"semcom_wer{tag}.png")
     print(f"\nDone. Plots: {out_png} + semcom_wer{tag}.png")
     return 0
 

@@ -43,7 +43,7 @@ schemes:
 
 | Scheme | What crosses the channel | Bits/msg |
 |---|---|---|
-| Traditional | raw waveform; receiver runs ASR+MT | ~1,692,000 |
+| Traditional | waveform as digital PCM bits; receiver runs ASR+MT | ~1,692,000 |
 | Semantic (text bits) | idiom-resolved English as UTF-8 over BPSK | ~700 (**2418× fewer**) |
 | Semantic (text, rep-3 coded) | same + rate-1/3 repetition code | ~2,100 (806× fewer) |
 | Semantic (our codec) | learned symbols, 8-bit quantized | ~2,300 (**733× fewer**) |
@@ -52,20 +52,23 @@ The codec is a transformer encoder/decoder **trained by us from scratch**
 (DeepSC paradigm, Xie et al. 2021) with the noisy channel *inside* the
 training loop, at random SNRs.
 
-Results:
-- Good channel (10 dB): text bits deliver the meaning **perfectly** at 1/2418
-  of the bandwidth.
-- Bad channel (≤ 2 dB): text bits fall off the "digital cliff" (bit errors
-  shred UTF-8: chrF 0.04 at 0 dB). A repetition code delays the cliff a few
-  dB but still collapses. The **codec degrades gracefully** — it is the
-  only semantic scheme alive at -5 dB, and roughly
-  matches the full waveform while sending 733× fewer bits. Graceful
-  degradation is the signature result of learned semantic communication.
-- Rayleigh fading [`semcom_snr_rayleigh.png`]: deep fades break digital text
-  even at 10 dB (0.78, not 1.0); the codec's edge grows — at -5 dB it beats
-  **everything**, including the full waveform.
-- WER view [`semcom_wer.png`]: below the cliff, uncoded text decodes to
-  garbage *longer than the sentence* — WER 7.3 at -2 dB vs codec 0.91.
+Results — the literature-standard crossover, reproduced on our data
+[`literature_comparison.png`]:
+- Good channel (10 dB): classical digital is near-perfect (0.95) — and text
+  bits **match it** (1.00) at 1/2418 of the bandwidth
+  [`semcom_efficiency.png`: ~2,500× more meaning per kilobit at equal quality].
+- Below 10 dB classical cliffs FIRST: its 1.7-Mbit message collects ~10,000
+  bit errors at 5 dB where the 700-bit text message collects ~4. Uncoded text
+  cliffs below ~3 dB. **Rep-3 coded text holds a perfect score down to 5 dB
+  and dominates the mid-range** — the practical sweet spot at 806×
+  compression. The **codec degrades gracefully** — the only scheme alive at
+  -5 dB. Graceful degradation is the signature result of learned semcom.
+- Rayleigh fading [`semcom_snr_rayleigh.png`]: deep fades hurt every digital
+  scheme even at 10 dB; **rep-3 wins at every single SNR** — redundancy is
+  what survives a fade.
+- No idioms, gold refs [`semcom_snr_gold_literal.png`]: on literal-only
+  sentences traditional TIES text at 10 dB (0.42 vs 0.43) — the gap on the
+  full test set is idiom mistranslation, not channel noise.
 - Semantic noise [`semcom_semnoise.png`]: corrupt words at the *sender* and
   the codec does worse than plain text — it fights channel noise, not meaning
   corruption. Honest ablation; meaning errors must be fixed at the source.
@@ -85,14 +88,20 @@ the whole argument.
 
 ## 6. If asked (honest caveats)
 
-- We DO include a coded baseline (rep-3 majority vote); modern LDPC/turbo
-  codes would push the cliff further left at similar rate — the shape holds.
-- Robustness curves score each scheme against its own clean-channel output;
-  absolute accuracy vs gold Hindi references: `semcom_snr_gold.png`.
+- Traditional is digital but uncoded PCM; with LDPC/turbo coding it would
+  hold to ~5 dB before its cliff. rep-3 is likewise a simple code. The
+  crossover shape is the standard published result either way.
+- Robustness curves score each scheme against its own clean-channel output
+  (the literature-standard view); absolute accuracy vs gold Hindi references:
+  `semcom_snr_gold.png` — gold caps everything at the translator's quality
+  (~0.35), so don't compare those numbers across papers.
 - Codec symbols are 8-bit quantized (realistic digital transmission);
   quantization cost no measurable quality vs float32.
 - Channels: AWGN + quasi-static flat Rayleigh (perfect CSI); no Doppler or
   frequency selectivity.
+- The live demo's traditional scheme adds noise to the analog waveform
+  (audibly intuitive); the plots use digital PCM bits over BPSK
+  (literature-standard). Same story, different demo affordance.
 
 ## Demo checklist
 

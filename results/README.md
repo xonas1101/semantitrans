@@ -18,6 +18,9 @@ published work (DeepSC, IdiomKB, Baziotis 2023, Zaitova 2025, ...).
 | Semcom over Rayleigh fading | `semcom_snr_rayleigh.png` (+`_gold`) | matching `.csv` | `KEY_RESULTS.md` §7 |
 | Semcom WER vs SNR (all channels) | `semcom_wer*.png` | in `semcom_snr*.csv` | `KEY_RESULTS.md` §8 |
 | Semantic noise at the sender | `semcom_semnoise.png` (+`_wer`) | `semcom_semnoise.csv` | `KEY_RESULTS.md` §9 |
+| Non-idiomatic sentences only (gold) | `semcom_snr_gold_literal.png` | matching `.csv` | `KEY_RESULTS.md` §6b |
+| Bandwidth efficiency at equal quality | `semcom_efficiency.png` | from `semcom_snr.csv` | `KEY_RESULTS.md` §6c |
+| Published crossover (approx., redrawn) | `literature_comparison.png` | — | `KEY_RESULTS.md` §10 |
 | Idiom-aware vs baseline + LTE (gold) | — | manifest.csv | `KEY_RESULTS.md` §1–2 |
 
 ## Pipeline
